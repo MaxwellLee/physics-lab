@@ -6,9 +6,6 @@
   <meta name="theme-color" content="#03060c">
   <title>日食与月食 · 物理实验室</title>
   <link rel="stylesheet" href="./style.css">
-  <script type="importmap">
-    {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
-  </script>
 </head>
 <body>
   <canvas id="space-canvas" aria-label="太阳、地球和月球三维空间模型"></canvas>
@@ -79,7 +76,35 @@
     <p class="tip">操作：在空间视角拖动旋转、滚轮缩放；点击地球或右侧按钮切换到地面。时间轴支持正放、倒放和加速。</p>
   </dialog>
 
-  <div class="loading" id="loading"><span></span><p>正在建立天体坐标系</p><small>INITIALIZING ORBITAL MODEL</small></div>
-  <script type="module" src="./app.js"></script>
+  <div class="loading" id="loading">
+    <span></span>
+    <p id="loading-title">正在建立天体坐标系</p>
+    <small id="loading-detail">INITIALIZING ORBITAL MODEL</small>
+    <div class="loading-error" id="loading-error" hidden>
+      <b>三维模型没有成功启动</b>
+      <p>请刷新页面；如果问题持续，请把这个画面截图发给我。</p>
+    </div>
+  </div>
+  <script>
+    window.__orbitalModelReady = false;
+    window.__showOrbitalError = function (detail) {
+      var loading = document.getElementById('loading');
+      if (!loading || window.__orbitalModelReady) return;
+      loading.classList.add('failed');
+      document.getElementById('loading-title').textContent = '模型启动失败';
+      document.getElementById('loading-detail').textContent = detail || 'MODEL STARTUP ERROR';
+      document.getElementById('loading-error').hidden = false;
+    };
+    window.addEventListener('error', function (event) {
+      window.__showOrbitalError(event.message || 'SCRIPT LOAD ERROR');
+    });
+    window.addEventListener('unhandledrejection', function () {
+      window.__showOrbitalError('UNEXPECTED STARTUP ERROR');
+    });
+    window.setTimeout(function () {
+      if (!window.__orbitalModelReady) window.__showOrbitalError('STARTUP TIMEOUT');
+    }, 8000);
+  </script>
+  <script defer src="./app.bundle.js"></script>
 </body>
 </html>

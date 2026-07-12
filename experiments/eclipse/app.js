@@ -202,5 +202,6 @@ if(scenarios[requestedScenario]){
 }
 if(params.has('t')){state.time=THREE.MathUtils.clamp(Number(params.get('t'))||0,-1.25,1.25);state.playing=false;$('#time-slider').value=state.time;$('#play-button span').textContent='▶';}
 if(params.get('view')==='ground')setTimeout(enterGround,120);
+window.__orbitalModelReady=true;
 setTimeout(()=>$('#loading').classList.add('done'),550);
 setTimeout(()=>$('#loading')?.remove(),1450);
