@@ -21,14 +21,17 @@ physics-lab/
 
 ## 本地预览
 
-ES Modules 需要通过本地服务器打开，不能直接双击 HTML 文件。
+发布版本已将 Three.js 打包到本地脚本中，可以直接双击 `index.html`，再进入日月食实验；不需要等待 CDN，也不会受到本地 ES Modules 跨域限制。
+
+开发时修改 `experiments/eclipse/app.js` 后，需要重新生成浏览器使用的 `app.bundle.js`：
 
 ```powershell
 cd physics-lab
-python -m http.server 8000
+npm install
+npm run build
 ```
 
-浏览器访问 `http://localhost:8000/`。
+不要直接编辑 `app.bundle.js`，它是自动生成的发布文件。
 
 ## 发布到 GitHub Pages
 
@@ -45,6 +48,9 @@ python -m http.server 8000
 - 月食时地球位于日月之间；月全食进入地球本影后，月面用穿过地球大气层的红橙光表现。
 - 为了让三颗天体同时清晰出现在屏幕上，空间模式的天体大小和距离采用教学可视化比例，不是统一真实比例。
 - 地面模式重点表达太阳与月球视圆面的相对运动、食甚与复圆的连续过程。
-- Three.js 从 jsDelivr CDN 加载，因此在线展示无需构建；课堂断网环境需要另行改为本地依赖。
+- Three.js 已打包进发布脚本，不依赖第三方 CDN；直接打开和 GitHub Pages 使用同一份三维代码。
+- 地球、云层和月球使用 NASA 真实影像；桌面端自动选择 4K，较弱设备自动降至 2K，也可以在实验面板手动切换。
 
 物理关系参考：[NASA 日月食几何](https://science.nasa.gov/eclipses/geometry/)、[NASA 日月食与月球](https://science.nasa.gov/moon/eclipses/)、[NASA 月球轨道参数](https://eclipse.gsfc.nasa.gov/SEhelp/moonorbit.html)。
+
+纹理来源、处理方法和署名见 [`assets/textures/SOURCES.md`](assets/textures/SOURCES.md)。

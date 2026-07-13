@@ -1,0 +1,15 @@
+{
+  "name": "physics-lab",
+  "version": "0.1.0",
+  "private": true,
+  "description": "面向课堂演示的交互式物理实验库",
+  "scripts": {
+    "build": "esbuild ./experiments/eclipse/app.js --bundle --format=iife --target=es2020 --minify --loader:.jpg=dataurl --loader:.png=dataurl --outfile=./experiments/eclipse/app.bundle.js"
+  },
+  "dependencies": {
+    "three": "0.180.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.1"
+  }
+}

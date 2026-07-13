@@ -27,6 +27,7 @@ This repository contains browser-based physics demonstrations for classroom use.
 
 ## Validation before release
 
+- After changing `experiments/eclipse/app.js`, run `npm run build` and commit the regenerated `app.bundle.js`; the HTML uses the bundle so it can also run from a local `file://` URL.
 - Test every scenario at its start, maximum/critical state, and end.
 - Test forward play, reverse play, pause, speed changes, view switching, and all visibility toggles.
 - Inspect at desktop and narrow/mobile viewport sizes.

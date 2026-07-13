@@ -6,9 +6,6 @@
   <meta name="theme-color" content="#03060c">
   <title>日食与月食 · 物理实验室</title>
   <link rel="stylesheet" href="./style.css">
-  <script type="importmap">
-    {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
-  </script>
 </head>
 <body>
   <canvas id="space-canvas" aria-label="太阳、地球和月球三维空间模型"></canvas>
@@ -42,6 +39,7 @@
     </div>
     <div class="setting-row"><span>显示运行轨迹</span><label class="switch"><input type="checkbox" id="orbit-toggle" checked><i></i></label></div>
     <div class="setting-row"><span>显示天体标签</span><label class="switch"><input type="checkbox" id="label-toggle" checked><i></i></label></div>
+    <div class="setting-row quality-row"><span>天体画质</span><button class="quality-button" id="quality-button" type="button">自动 · 检测中</button></div>
     <button class="observe-button" id="observe-button"><span>从地球表面观察</span><i>◎</i></button>
   </aside>
 
@@ -61,7 +59,7 @@
     <div class="timeline-top"><span id="time-negative">− 01:30</span><small>食甚 00:00</small><span id="time-positive">+ 01:30</span></div>
     <input type="range" id="time-slider" min="-1.25" max="1.25" value="-1.05" step="0.001" aria-label="食甚前后时间">
     <div class="transport">
-      <button id="reverse-button" aria-label="倒放">↶<small>倒放</small></button>
+      <button id="reverse-button" aria-label="切换为倒放" aria-pressed="false"><span id="direction-icon" aria-hidden="true">↶</span><small>倒放</small></button>
       <button class="play" id="play-button" aria-label="播放或暂停"><span>Ⅱ</span></button>
       <button id="speed-button" aria-label="切换播放速度"><b>1×</b><small>速度</small></button>
     </div>
@@ -77,9 +75,38 @@
     <p>本实验保持天体运行方向、月球轨道倾角与食的遮挡关系正确。为了让太阳、地球和月球能同时出现在课堂屏幕中，天体大小与距离采用了教学可视化比例，并非统一真实比例。</p>
     <dl><div><dt>月球轨道倾角</dt><dd>约 5.1°</dd></div><div><dt>地月平均距离</dt><dd>约 38.4 万 km</dd></div><div><dt>日地平均距离</dt><dd>约 1.496 亿 km</dd></div></dl>
     <p class="tip">操作：在空间视角拖动旋转、滚轮缩放；点击地球或右侧按钮切换到地面。时间轴支持正放、倒放和加速。</p>
+    <p class="tip">真实纹理来源：NASA Earth Observatory Blue Marble；NASA SVS、LRO/LROC 与 LOLA 月球影像及高程数据。模型采用教学可视化比例。</p>
   </dialog>
 
-  <div class="loading" id="loading"><span></span><p>正在建立天体坐标系</p><small>INITIALIZING ORBITAL MODEL</small></div>
-  <script type="module" src="./app.js"></script>
+  <div class="loading" id="loading">
+    <span></span>
+    <p id="loading-title">正在建立天体坐标系</p>
+    <small id="loading-detail">INITIALIZING ORBITAL MODEL</small>
+    <div class="loading-error" id="loading-error" hidden>
+      <b>三维模型没有成功启动</b>
+      <p>请刷新页面；如果问题持续，请把这个画面截图发给我。</p>
+    </div>
+  </div>
+  <script>
+    window.__orbitalModelReady = false;
+    window.__showOrbitalError = function (detail) {
+      var loading = document.getElementById('loading');
+      if (!loading || window.__orbitalModelReady) return;
+      loading.classList.add('failed');
+      document.getElementById('loading-title').textContent = '模型启动失败';
+      document.getElementById('loading-detail').textContent = detail || 'MODEL STARTUP ERROR';
+      document.getElementById('loading-error').hidden = false;
+    };
+    window.addEventListener('error', function (event) {
+      window.__showOrbitalError(event.message || 'SCRIPT LOAD ERROR');
+    });
+    window.addEventListener('unhandledrejection', function () {
+      window.__showOrbitalError('UNEXPECTED STARTUP ERROR');
+    });
+    window.setTimeout(function () {
+      if (!window.__orbitalModelReady) window.__showOrbitalError('STARTUP TIMEOUT');
+    }, 8000);
+  </script>
+  <script defer src="./app.bundle.js"></script>
 </body>
 </html>
