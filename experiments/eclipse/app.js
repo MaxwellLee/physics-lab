@@ -85,13 +85,39 @@ const earthTexture = canvasTexture(1024, 512, (ctx, w, h) => {
 });
 const cloudTexture = canvasTexture(1024, 512, (ctx,w,h)=>{ctx.clearRect(0,0,w,h);ctx.fillStyle='rgba(255,255,255,.34)';for(let i=0;i<270;i++){const x=Math.random()*w,y=Math.random()*h,r=Math.random()*8+1;ctx.beginPath();ctx.ellipse(x,y,r*3,r,Math.random()*.6,0,Math.PI*2);ctx.fill()}});
 const moonTexture = canvasTexture(512, 256, (ctx,w,h)=>{const g=ctx.createLinearGradient(0,0,w,h);g.addColorStop(0,'#bfc2bd');g.addColorStop(.5,'#8d918e');g.addColorStop(1,'#565b59');ctx.fillStyle=g;ctx.fillRect(0,0,w,h);for(let i=0;i<105;i++){const x=Math.random()*w,y=Math.random()*h,r=Math.random()*10+2;ctx.fillStyle=`rgba(35,39,38,${Math.random()*.24+.05})`;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();ctx.strokeStyle='rgba(240,240,230,.1)';ctx.stroke()}});
-const sunTexture = canvasTexture(512, 256, (ctx,w,h)=>{const g=ctx.createLinearGradient(0,0,w,h);g.addColorStop(0,'#ffb22f');g.addColorStop(.48,'#ffe26b');g.addColorStop(1,'#e97d19');ctx.fillStyle=g;ctx.fillRect(0,0,w,h);ctx.globalCompositeOperation='soft-light';for(let i=0;i<760;i++){const x=Math.random()*w,y=Math.random()*h,r=Math.random()*4+.4;ctx.fillStyle=i%3?'rgba(255,245,164,.42)':'rgba(165,55,5,.28)';ctx.beginPath();ctx.ellipse(x,y,r*2.8,r,Math.random(),0,Math.PI*2);ctx.fill()}ctx.globalCompositeOperation='source-over'});
-
 function glowTexture(inner, middle) { return canvasTexture(256,256,(ctx,w,h)=>{const g=ctx.createRadialGradient(w/2,h/2,8,w/2,h/2,w/2);g.addColorStop(0,inner);g.addColorStop(.25,middle);g.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=g;ctx.fillRect(0,0,w,h)}); }
 function makeSprite(texture, scale, opacity=1){const m=new THREE.SpriteMaterial({map:texture,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,opacity});const s=new THREE.Sprite(m);s.scale.set(scale,scale,1);return s}
 
 const sunGroup = new THREE.Group();
-const sun = new THREE.Mesh(new THREE.SphereGeometry(3.7, 64, 40), new THREE.MeshBasicMaterial({ map:sunTexture, color:0xffd05a }));
+const sunMaterial=new THREE.ShaderMaterial({
+  uniforms:{uTime:{value:0}},
+  vertexShader:`varying vec3 vSpherePosition;varying vec3 vViewNormal;void main(){vSpherePosition=normalize(position);vViewNormal=normalize(normalMatrix*normal);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+  fragmentShader:`
+    uniform float uTime;
+    varying vec3 vSpherePosition;
+    varying vec3 vViewNormal;
+    float hash31(vec3 p){p=fract(p*.1031);p+=dot(p,p.yzx+33.33);return fract((p.x+p.y)*p.z);}
+    float noise3(vec3 p){
+      vec3 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
+      return mix(mix(mix(hash31(i+vec3(0,0,0)),hash31(i+vec3(1,0,0)),f.x),mix(hash31(i+vec3(0,1,0)),hash31(i+vec3(1,1,0)),f.x),f.y),mix(mix(hash31(i+vec3(0,0,1)),hash31(i+vec3(1,0,1)),f.x),mix(hash31(i+vec3(0,1,1)),hash31(i+vec3(1,1,1)),f.x),f.y),f.z);
+    }
+    float fbm(vec3 p){float value=0.0,amplitude=.52;for(int i=0;i<4;i++){value+=amplitude*noise3(p);p=p*2.03+vec3(7.1,3.7,5.4);amplitude*=.5;}return value;}
+    void main(){
+      vec3 p=normalize(vSpherePosition);
+      float drift=uTime*.025;
+      float broad=fbm(p*3.1+vec3(drift,-drift*.45,0.0));
+      float granules=fbm(p*22.0+vec3(-drift*.7,drift*.35,2.4));
+      float cells=smoothstep(.48,.69,granules);
+      vec3 amber=vec3(1.0,.36,.025),gold=vec3(1.0,.66,.10),hot=vec3(1.0,.88,.36);
+      vec3 color=mix(amber,gold,.48+.28*broad);
+      color=mix(color,hot,.045+.16*cells);
+      float facing=clamp(vViewNormal.z,0.0,1.0);
+      float limb=mix(.68,1.06,pow(facing,.38));
+      color*=limb*(.98+.04*granules);
+      gl_FragColor=vec4(color,1.0);
+    }`
+});
+const sun = new THREE.Mesh(new THREE.SphereGeometry(3.7, 96, 64),sunMaterial);
 sunGroup.add(sun,makeSprite(glowTexture('rgba(255,249,215,1)','rgba(255,128,26,.32)'),15),makeSprite(glowTexture('rgba(255,212,128,.32)','rgba(255,102,12,.07)'),27,.55));
 scene.add(sunGroup);
 
@@ -277,7 +303,7 @@ $('#info-button').addEventListener('click',()=>$('#info-dialog').showModal());$(
 
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);resizeGround();if(state.ground)drawGround()});
 
-function animate(now){requestAnimationFrame(animate);const dt=Math.min((now-state.lastFrame)/1000,.05);state.lastFrame=now;if(state.playing){state.time+=dt*.16*state.speed;if(state.time>1.25)state.time=-1.25;if(state.time< -1.25)state.time=1.25;$('#time-slider').value=state.time}earth.rotation.y+=dt*.17;clouds.rotation.y+=dt*.2;sun.rotation.y+=dt*.035;orbitalPositions();if(cameraTween){const progress=Math.min(1,(now-cameraTween.started)/cameraTween.duration),eased=easeInOutCubic(progress);camera.position.lerpVectors(cameraTween.fromPosition,cameraTween.toPosition,eased);controls.target.lerpVectors(cameraTween.fromTarget,cameraTween.toTarget,eased);if(progress>=1)cameraTween=null}controls.update();updateReadout();if(state.ground)drawGround();else{projectLabel(sunGroup,$('#sun-label'));projectLabel(earthGroup,$('#earth-label'));projectLabel(moon,$('#moon-label'))}renderer.render(scene,camera)}
+function animate(now){requestAnimationFrame(animate);const dt=Math.min((now-state.lastFrame)/1000,.05);state.lastFrame=now;if(state.playing){state.time+=dt*.16*state.speed;if(state.time>1.25)state.time=-1.25;if(state.time< -1.25)state.time=1.25;$('#time-slider').value=state.time}earth.rotation.y+=dt*.17;clouds.rotation.y+=dt*.2;sun.rotation.y+=dt*.035;sunMaterial.uniforms.uTime.value=now*.001;orbitalPositions();if(cameraTween){const progress=Math.min(1,(now-cameraTween.started)/cameraTween.duration),eased=easeInOutCubic(progress);camera.position.lerpVectors(cameraTween.fromPosition,cameraTween.toPosition,eased);controls.target.lerpVectors(cameraTween.fromTarget,cameraTween.toTarget,eased);if(progress>=1)cameraTween=null}controls.update();updateReadout();if(state.ground)drawGround();else{projectLabel(sunGroup,$('#sun-label'));projectLabel(earthGroup,$('#earth-label'));projectLabel(moon,$('#moon-label'))}renderer.render(scene,camera)}
 
 resizeGround();orbitalPositions();updateReadout();requestAnimationFrame(animate);
 const params=new URLSearchParams(location.search);
