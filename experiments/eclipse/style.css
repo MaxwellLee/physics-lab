@@ -16,4 +16,5 @@ body.ground-view #ground-canvas{opacity:1;filter:blur(0)}
 body.ground-view .control-panel{visibility:visible}
 body.view-transitioning .control-panel,body.view-transitioning .timeline{pointer-events:none}
 .quality-row{align-items:center}.quality-button{border:1px solid rgba(98,221,255,.25);background:rgba(38,168,214,.08);color:var(--cyan);padding:5px 8px;font-size:7px;letter-spacing:.08em;cursor:pointer}.quality-button:hover{background:rgba(38,168,214,.17)}
+.transport #reverse-button[aria-pressed="true"]{color:var(--cyan);background:rgba(38,168,214,.08)}.transport #reverse-button[aria-pressed="true"] small{color:var(--cyan)}
 .observe-button:disabled{opacity:.55;cursor:default;border-color:rgba(98,221,255,.22);background:rgba(38,168,214,.05)}

@@ -259,7 +259,19 @@ applyTextureQuality(state.quality);
 $('#observe-button').addEventListener('click',()=>enterGround(false));$('#space-return').addEventListener('click',leaveGround);
 $('#time-slider').addEventListener('input',e=>{state.time=Number(e.target.value);state.playing=false;$('#play-button span').textContent='▶';updateReadout();drawGround()});
 $('#play-button').addEventListener('click',()=>{state.playing=!state.playing;$('#play-button span').textContent=state.playing?'Ⅱ':'▶'});
-$('#reverse-button').addEventListener('click',()=>{state.speed=-Math.abs(state.speed||1);state.playing=true;$('#speed-button b').textContent=`${state.speed}×`;$('#play-button span').textContent='Ⅱ'});
+function togglePlaybackDirection(){
+  const reverseButton=$('#reverse-button');
+  const isReversing=state.speed<0;
+  state.speed=(isReversing?1:-1)*Math.abs(state.speed||1);
+  state.playing=true;
+  $('#direction-icon').textContent=isReversing?'↶':'↷';
+  reverseButton.querySelector('small').textContent=isReversing?'倒放':'正放';
+  reverseButton.setAttribute('aria-label',isReversing?'切换为倒放':'切换为正放');
+  reverseButton.setAttribute('aria-pressed',String(!isReversing));
+  $('#speed-button b').textContent=`${state.speed}×`;
+  $('#play-button span').textContent='Ⅱ';
+}
+$('#reverse-button').addEventListener('click',event=>{if(event.detail<=1)togglePlaybackDirection()});
 const speeds=[.25,.5,1,2,4,8];$('#speed-button').addEventListener('click',()=>{const current=Math.abs(state.speed),next=speeds[(speeds.indexOf(current)+1)%speeds.length];state.speed=Math.sign(state.speed||1)*next;$('#speed-button b').textContent=`${state.speed}×`});
 $('#info-button').addEventListener('click',()=>$('#info-dialog').showModal());$('#dialog-close').addEventListener('click',()=>$('#info-dialog').close());
 
