@@ -165,8 +165,18 @@ createStarfield();
 function ellipseLine(rx, rz, color, opacity, segments=192){const pts=[];for(let i=0;i<=segments;i++){const a=i/segments*Math.PI*2;pts.push(new THREE.Vector3(Math.cos(a)*rx,0,Math.sin(a)*rz))}return new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color,transparent:true,opacity}))}
 const orbitGroup=new THREE.Group();
 const earthOrbit=ellipseLine(25,24.6,0x3bc8ee,.25);orbitGroup.add(earthOrbit);
-const moonOrbit=ellipseLine(4.1,4.1,0x74dff7,.37);moonOrbit.rotation.x=THREE.MathUtils.degToRad(5.145);earthGroup.add(moonOrbit);
+const moonOrbit=ellipseLine(4.1,4.1,0x74dff7,.37);moonOrbit.frustumCulled=false;earthGroup.add(moonOrbit);
 scene.add(orbitGroup);
+
+function updateMoonOrbit(radialBasis,tangentBasis,distance){
+  const positions=moonOrbit.geometry.attributes.position;
+  for(let i=0;i<positions.count;i++){
+    const angle=i/(positions.count-1)*Math.PI*2;
+    const radial=Math.cos(angle)*distance,tangent=Math.sin(angle)*distance;
+    positions.setXYZ(i,radialBasis.x*radial+tangentBasis.x*tangent,radialBasis.y*radial+tangentBasis.y*tangent,radialBasis.z*radial+tangentBasis.z*tangent);
+  }
+  positions.needsUpdate=true;
+}
 
 function makeShadowVolume(startRadius,endRadius,length,color,opacity){const mesh=new THREE.Mesh(new THREE.CylinderGeometry(endRadius,startRadius,length,40,1,true),new THREE.MeshBasicMaterial({color,transparent:true,opacity,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending}));mesh.geometry.rotateZ(-Math.PI/2);mesh.userData.length=length;return mesh}
 const solarUmbra=makeShadowVolume(.54,.025,5.15,0x274d77,.25);
@@ -192,9 +202,18 @@ function orbitalPositions() {
   const side=cfg.family==='solar'?1:-1;
   const baseDir=sunDirection.clone().multiplyScalar(side);
   const moonDistance=cfg.family==='solar'?(cfg.moonScale<.9?4.6:4.05):4.1;
-  const relative=baseDir.multiplyScalar(moonDistance*Math.cos(phase)).add(perpendicular.multiplyScalar(moonDistance*Math.sin(phase)));
-  relative.y=Math.sin(phase)*moonDistance*Math.sin(THREE.MathUtils.degToRad(5.145)) + cfg.spaceMiss;
+  const conjunctionLatitude=THREE.MathUtils.clamp(cfg.spaceMiss/moonDistance,-.95,.95);
+  const horizontalScale=Math.sqrt(1-conjunctionLatitude*conjunctionLatitude);
+  const radialBasis=baseDir.clone().multiplyScalar(horizontalScale).add(new THREE.Vector3(0,conjunctionLatitude,0));
+  const trueInclinationSine=Math.sin(THREE.MathUtils.degToRad(5.145));
+  const planeInclinationSine=Math.max(trueInclinationSine,Math.abs(conjunctionLatitude));
+  const tangentLatitude=Math.sqrt(Math.max(0,planeInclinationSine*planeInclinationSine-conjunctionLatitude*conjunctionLatitude));
+  const liftMix=tangentLatitude/horizontalScale;
+  const liftedBasis=baseDir.clone().multiplyScalar(-conjunctionLatitude).add(new THREE.Vector3(0,horizontalScale,0));
+  const tangentBasis=perpendicular.clone().multiplyScalar(Math.sqrt(Math.max(0,1-liftMix*liftMix))).add(liftedBasis.multiplyScalar(liftMix));
+  const relative=radialBasis.clone().multiplyScalar(moonDistance*Math.cos(phase)).add(tangentBasis.clone().multiplyScalar(moonDistance*Math.sin(phase)));
   moon.position.copy(earthPos).add(relative);
+  updateMoonOrbit(radialBasis,tangentBasis,moonDistance);
   const faceEarth=new THREE.Vector3().subVectors(earthPos,moon.position).normalize();
   moon.quaternion.setFromUnitVectors(new THREE.Vector3(1,0,0),faceEarth);
   sunlight.position.set(0,0,0);
