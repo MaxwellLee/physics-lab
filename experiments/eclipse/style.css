@@ -5,3 +5,15 @@
 @media(max-width:560px){.back span{display:none}.control-panel{bottom:105px;right:8px;width:210px;padding:12px}.panel-head,.setting-row{display:none}.preset{padding:6px}.preset span small{display:none}.observe-button{margin-top:8px;padding:9px}.event-readout{left:12px;bottom:110px;width:135px}.event-readout>strong{font-size:18px}.timeline{width:calc(100vw - 16px);padding-left:12px;padding-right:12px}.timeline-top span{display:none}.ground-hint{width:100%;text-align:center}dialog dl{grid-template-columns:1fr}.title-lockup h1{font-size:13px}}
 
 .loading-error{width:min(360px,calc(100vw - 44px));margin-top:24px;padding:18px;border:1px solid rgba(255,126,105,.3);background:rgba(84,22,18,.12);text-align:center}.loading-error b{font-size:12px;font-weight:500;color:#ffc3b8}.loading-error p{font-size:10px;line-height:1.7;letter-spacing:0;color:#8ea0a8;margin:8px 0 0}.loading.failed>span{border-color:rgba(255,126,105,.18);border-top-color:#ff806c;animation-duration:2.4s}.loading.failed>small{color:#9b625b}
+
+/* Explicit state rules: author display declarations must not override [hidden]. */
+#ground-canvas[hidden],.preset-list[hidden],.space-return[hidden],.ground-hint[hidden]{display:none!important}
+#space-canvas,#ground-canvas{transition:opacity .72s cubic-bezier(.22,.75,.18,1),filter .72s ease;will-change:opacity,filter}
+#space-canvas{z-index:0;opacity:1}
+#ground-canvas{z-index:1;opacity:0;pointer-events:none;filter:blur(5px)}
+body.ground-view #space-canvas{visibility:visible;opacity:0;pointer-events:none;filter:blur(3px)}
+body.ground-view #ground-canvas{opacity:1;filter:blur(0)}
+body.ground-view .control-panel{visibility:visible}
+body.view-transitioning .control-panel,body.view-transitioning .timeline{pointer-events:none}
+.quality-row{align-items:center}.quality-button{border:1px solid rgba(98,221,255,.25);background:rgba(38,168,214,.08);color:var(--cyan);padding:5px 8px;font-size:7px;letter-spacing:.08em;cursor:pointer}.quality-button:hover{background:rgba(38,168,214,.17)}
+.observe-button:disabled{opacity:.55;cursor:default;border-color:rgba(98,221,255,.22);background:rgba(38,168,214,.05)}

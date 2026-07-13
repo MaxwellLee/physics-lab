@@ -49,5 +49,8 @@ npm run build
 - 为了让三颗天体同时清晰出现在屏幕上，空间模式的天体大小和距离采用教学可视化比例，不是统一真实比例。
 - 地面模式重点表达太阳与月球视圆面的相对运动、食甚与复圆的连续过程。
 - Three.js 已打包进发布脚本，不依赖第三方 CDN；直接打开和 GitHub Pages 使用同一份三维代码。
+- 地球、云层和月球使用 NASA 真实影像；桌面端自动选择 4K，较弱设备自动降至 2K，也可以在实验面板手动切换。
 
 物理关系参考：[NASA 日月食几何](https://science.nasa.gov/eclipses/geometry/)、[NASA 日月食与月球](https://science.nasa.gov/moon/eclipses/)、[NASA 月球轨道参数](https://eclipse.gsfc.nasa.gov/SEhelp/moonorbit.html)。
+
+纹理来源、处理方法和署名见 [`assets/textures/SOURCES.md`](assets/textures/SOURCES.md)。
