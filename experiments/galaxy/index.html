@@ -46,8 +46,13 @@
     <div class="object-type" id="object-type">BARRED SPIRAL GALAXY</div>
     <div class="object-head"><div><h2 id="object-name">银河系</h2><p id="object-en">MILKY WAY</p></div><span id="object-index">MW</span></div>
     <p class="object-summary" id="object-summary"></p>
+    <div class="info-depth" id="info-depth" role="group" aria-label="资料详细程度">
+      <button id="info-brief" class="active" type="button">简版</button>
+      <button id="info-detail" type="button">详细版</button>
+    </div>
     <dl class="metrics" id="object-metrics"></dl>
     <div class="facts" id="object-facts"></div>
+    <div class="object-details" id="object-details" hidden></div>
     <div class="scale-note" id="scale-note"></div>
     <a class="source-link" id="source-link" href="#" target="_blank" rel="noreferrer">查看权威资料 ↗</a>
   </aside>
@@ -58,6 +63,7 @@
     <button class="space-marker danger" id="marker-sgr" data-target="sagittarius-a"><i></i><span><b>人马座 A*</b><small>GALACTIC CENTER</small></span></button>
     <button class="space-marker major" id="marker-moon" data-target="moon"><i></i><span><b>月球</b><small>384,400 KM</small></span></button>
   </div>
+  <div class="system-label-layer" id="system-label-layer" aria-hidden="true"></div>
 
   <div class="mode-caption">
     <small id="mode-kicker">MILKY WAY / SCIENTIFIC RECONSTRUCTION</small>
@@ -70,7 +76,7 @@
   <section class="transport" aria-label="模拟控制">
     <button id="play-button" class="play" aria-label="播放或暂停"><span>Ⅱ</span><small>暂停</small></button>
     <button id="speed-button"><b>100 万年/秒</b><small>时间倍率</small></button>
-    <button id="orbit-button" class="active"><i></i><small>轨道</small></button>
+    <button id="orbit-button" class="active"><i></i><small id="orbit-label">轨道</small></button>
     <button id="label-button" class="active"><i></i><small>标签</small></button>
     <button id="quality-button"><b>AUTO</b><small>画质</small></button>
     <button id="home-button"><span>◎</span><small>银河系</small></button>
