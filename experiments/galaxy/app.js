@@ -28,6 +28,7 @@ let quality = 'auto';
 let mode = 'galaxy';
 let selectedId = 'galaxy';
 let infoPanelCollapsed = isMobile;
+let catalogPanelCollapsed = false;
 let infoDetailed = false;
 let playing = true;
 let showOrbits = true;
@@ -50,6 +51,14 @@ const roots = {};
 const textureCache = new Map();
 const solarBodies = new Map();
 const markerPositions = {solar:new THREE.Vector3(26,.15,0), sgr:new THREE.Vector3(0,0,0)};
+const galaxySystemMarkers = [
+  {marker:'marker-alpha-centauri',radius:24.2,tangent:3.2,height:.25,column:0,row:0,position:new THREE.Vector3()},
+  {marker:'marker-sirius',radius:23.4,tangent:-3.5,height:-.25,column:0,row:1,position:new THREE.Vector3()},
+  {marker:'marker-trappist-1',radius:28.1,tangent:4.1,height:.55,column:1,row:0,position:new THREE.Vector3()},
+  {marker:'marker-betelgeuse',radius:21.8,tangent:-5.4,height:.65,column:0,row:2,position:new THREE.Vector3()},
+  {marker:'marker-vega',radius:29.6,tangent:-2.8,height:.85,column:1,row:1,position:new THREE.Vector3()},
+  {marker:'marker-polaris',radius:30.7,tangent:5.1,height:1.15,column:1,row:2,position:new THREE.Vector3()}
+];
 const J2000_MS = Date.UTC(2000,0,1,12);
 
 const SPEEDS = {
@@ -479,7 +488,7 @@ function setRootVisibility(next){
 }
 
 function modeCopy(next,id){
-  if(next==='galaxy')return ['MILKY WAY / SCIENTIFIC RECONSTRUCTION','银河系 · 棒旋星系','拖动旋转，滚轮缩放；点击标记或搜索目标开始航行。'];
+  if(next==='galaxy')return ['MILKY WAY / SCIENTIFIC RECONSTRUCTION','银河系 · 棒旋星系','拖动旋转，滚轮缩放；本地恒星系统围绕太阳系位置作局部放大。'];
   if(next==='solar')return ['SOLAR SYSTEM / J2000 ORBIT MODEL','太阳系 · 八大行星','点击太阳或行星查看资料；点击地球进入地月系统。'];
   if(next==='earth')return ['EARTH–MOON SYSTEM / TEACHING SCALE','地月系 · 相互绕行','远景天体按地球视角方向排列，视直径为便于辨认而增强。'];
   if(next==='blackhole')return ['GALACTIC CENTER / RELATIVISTIC VISUALIZATION','人马座 A* · 银河系中心','阴影、光子环与被引力透镜弯曲的吸积盘为定性科学可视化，并非直接照片。'];
@@ -488,6 +497,7 @@ function modeCopy(next,id){
 
 function updateModeUI(next,id){
   document.body.className=`mode-${next}${document.body.classList.contains('no-labels')?' no-labels':''}`;
+  document.body.classList.toggle('catalog-collapsed',catalogPanelCollapsed);
   const copy=modeCopy(next,id);$('mode-kicker').textContent=copy[0];$('mode-title').textContent=copy[1];$('mode-description').textContent=copy[2];
   $('render-status').textContent=next==='galaxy'?'GALACTIC MODEL':next==='solar'?'ORBITAL MODEL':next==='earth'?'EARTH–MOON MODEL':next==='blackhole'?'GALACTIC CENTER':'STELLAR MODEL';
   $('orbit-label').textContent=next==='system'?(OBJECTS[id].guideLabel||'轨道'):'轨道';
@@ -630,11 +640,23 @@ function updateMarkers(){
   if(mode==='galaxy'){
     const a=galaxyDisk?.rotation.y||0;markerPositions.solar.set(Math.cos(a)*26,.15,-Math.sin(a)*26);
     entries.push(['marker-solar',markerPositions.solar],['marker-sgr',markerPositions.sgr]);
+    for(const marker of galaxySystemMarkers){
+      marker.position.set(
+        Math.cos(a)*marker.radius+Math.sin(a)*marker.tangent,
+        marker.height,
+        -Math.sin(a)*marker.radius+Math.cos(a)*marker.tangent
+      );
+      entries.push([marker.marker,marker.position,marker]);
+    }
   }else if(mode==='earth'&&roots.earth?.userData.moon){
     const moonPosition=new THREE.Vector3();roots.earth.userData.moon.getWorldPosition(moonPosition);entries.push(['marker-moon',moonPosition]);
   }else return;
-  entries.forEach(([id,p])=>{
-    const el=$(id);const v=p.clone().project(camera);const visible=v.z>-1&&v.z<1&&Math.abs(v.x)<1.08&&Math.abs(v.y)<1.08;el.style.opacity=visible?'1':'0';el.style.pointerEvents=visible?'auto':'none';el.style.left=`${(v.x*.5+.5)*innerWidth}px`;el.style.top=`${(-v.y*.5+.5)*innerHeight}px`;
+  entries.forEach(([id,p,layout])=>{
+    const el=$(id);const v=p.clone().project(camera);const visible=v.z>-1&&v.z<1&&Math.abs(v.x)<1.08&&Math.abs(v.y)<1.08;const screenX=(v.x*.5+.5)*innerWidth;const screenY=(-v.y*.5+.5)*innerHeight;el.style.opacity=visible?'1':'0';el.style.pointerEvents=visible?'auto':'none';el.style.left=`${screenX}px`;el.style.top=`${screenY}px`;
+    if(layout){
+      const catalogRight=catalogPanelCollapsed?30:$('catalog-panel').getBoundingClientRect().right+28;const infoLeft=infoPanelCollapsed?innerWidth-30:$('info-panel').getBoundingClientRect().left-22;const available=infoLeft-catalogRight;const compact=available<450;const index=layout.column*3+layout.row;const targetX=compact?infoLeft-128:catalogRight+available*(layout.column===0?.62:.82);const targetY=compact?innerHeight*.3+index*44:innerHeight*.42+layout.row*54;
+      el.style.setProperty('--label-shift-x',`${targetX-screenX-18}px`);el.style.setProperty('--label-shift-y',`${targetY-screenY}px`);
+    }else{el.style.removeProperty('--label-shift-x');el.style.removeProperty('--label-shift-y')}
   });
 }
 
@@ -694,7 +716,13 @@ $('quality-button').addEventListener('click',()=>{quality=quality==='auto'?'high
 $('home-button').addEventListener('click',()=>navigateTo('galaxy'));
 $('panel-close').addEventListener('click',()=>{infoPanelCollapsed=true;$('info-panel').classList.add('collapsed');$('info-reopen').hidden=false});
 $('info-reopen').addEventListener('click',()=>{infoPanelCollapsed=false;$('info-panel').classList.remove('collapsed');$('info-reopen').hidden=true});
-$('mobile-catalog').addEventListener('click',()=>$('catalog-panel').classList.toggle('open'));
+function setCatalogCollapsed(collapsed){
+  catalogPanelCollapsed=collapsed;$('catalog-panel').classList.toggle('collapsed',collapsed);$('catalog-reopen').hidden=!collapsed;document.body.classList.toggle('catalog-collapsed',collapsed);
+  if(collapsed)$('catalog-panel').classList.remove('open');
+}
+$('catalog-close').addEventListener('click',()=>setCatalogCollapsed(true));
+$('catalog-reopen').addEventListener('click',()=>{setCatalogCollapsed(false);if(isMobile)$('catalog-panel').classList.add('open')});
+$('mobile-catalog').addEventListener('click',()=>{if(catalogPanelCollapsed){setCatalogCollapsed(false);$('catalog-panel').classList.add('open');return}$('catalog-panel').classList.toggle('open')});
 $('model-info').addEventListener('click',()=>$('model-dialog').showModal());$('dialog-close').addEventListener('click',()=>$('model-dialog').close());
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();applyQuality()});
 

@@ -30,16 +30,18 @@
   </section>
 
   <aside class="catalog-panel" id="catalog-panel">
+    <button class="panel-close catalog-close" id="catalog-close" aria-label="收起目标导航">×</button>
     <div class="panel-kicker"><span>目标导航</span><small>DESTINATIONS</small></div>
     <div class="catalog-tabs" role="tablist">
       <button class="active" data-catalog="featured">重点目标</button>
       <button data-catalog="systems">恒星系统</button>
     </div>
     <div class="target-list" id="target-list"></div>
-    <p class="catalog-note">银河系内恒星系统彼此相距极远；标记大小采用教学比例。</p>
+    <p class="catalog-note">银河系总览中的本地恒星系统围绕太阳系作局部放大；标记大小采用教学比例。</p>
   </aside>
 
   <button class="mobile-catalog" id="mobile-catalog" aria-label="打开目标导航">⌕ <span>目标</span></button>
+  <button class="catalog-reopen" id="catalog-reopen" hidden aria-label="展开目标导航">⌕ <span>导航</span></button>
 
   <aside class="info-panel" id="info-panel" aria-live="polite">
     <button class="panel-close" id="panel-close" aria-label="收起资料卡">×</button>
@@ -61,6 +63,12 @@
   <div class="marker-layer" id="marker-layer" aria-hidden="false">
     <button class="space-marker major" id="marker-solar" data-target="solar-system"><i></i><span><b>太阳系</b><small>ORION SPUR</small></span></button>
     <button class="space-marker danger" id="marker-sgr" data-target="sagittarius-a"><i></i><span><b>人马座 A*</b><small>GALACTIC CENTER</small></span></button>
+    <button class="space-marker stellar" id="marker-alpha-centauri" data-target="alpha-centauri"><i></i><span><b>南门二系统</b><small>LOCAL NEIGHBORHOOD</small></span></button>
+    <button class="space-marker stellar" id="marker-sirius" data-target="sirius"><i></i><span><b>天狼星系统</b><small>LOCAL NEIGHBORHOOD</small></span></button>
+    <button class="space-marker stellar" id="marker-trappist-1" data-target="trappist-1"><i></i><span><b>TRAPPIST-1</b><small>LOCAL NEIGHBORHOOD</small></span></button>
+    <button class="space-marker stellar" id="marker-betelgeuse" data-target="betelgeuse"><i></i><span><b>参宿四</b><small>LOCAL NEIGHBORHOOD</small></span></button>
+    <button class="space-marker stellar" id="marker-vega" data-target="vega"><i></i><span><b>织女星</b><small>LOCAL NEIGHBORHOOD</small></span></button>
+    <button class="space-marker stellar" id="marker-polaris" data-target="polaris"><i></i><span><b>北极星</b><small>LOCAL NEIGHBORHOOD</small></span></button>
     <button class="space-marker major" id="marker-moon" data-target="moon"><i></i><span><b>月球</b><small>384,400 KM</small></span></button>
   </div>
   <div class="system-label-layer" id="system-label-layer" aria-hidden="true"></div>
