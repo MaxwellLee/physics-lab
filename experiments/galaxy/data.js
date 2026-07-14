@@ -7,6 +7,15 @@ export const OBJECTS = {
     note: '银河系远景不是从外部拍摄的照片。恒星数量、亮度和盘厚均经过抽样与视觉压缩。',
     source: 'https://science.nasa.gov/universe/galaxies/', sourceLabel: 'NASA · Galaxies'
   },
+  'solar-neighborhood': {
+    id: 'solar-neighborhood', name: '太阳邻域', en: 'SOLAR NEIGHBORHOOD', code: 'LSN', type: '本地恒星空间 · LOCAL STELLAR NEIGHBORHOOD', mode: 'neighborhood',
+    summary: '以太阳为坐标原点观察附近恒星系统的三维位置。模型使用 J2000 天球方向和以光年表示的线性距离，不再把邻近恒星分散到银河系不同旋臂。',
+    metrics: [['坐标原点', '太阳'], ['坐标框架', 'ICRS / J2000'], ['模型比例', '1 单位 = 1 光年'], ['初始范围', '约 700 光年']],
+    facts: ['远景中，南门二和天狼星会与太阳几乎重叠；继续缩放后才会自然分开。', '织女星与 TRAPPIST-1 位于数十光年尺度，参宿四和北极星位于数百光年尺度。', '点击中心太阳系标记可继续进入八大行星模型。'],
+    details: [{title:'真实相对位置',body:'每个目标的位置由 J2000 赤经、赤纬和距离换算为以太阳为中心的三维直角坐标。距离环保持线性比例，恒星标记尺寸只为便于辨认。'},{title:'渐进标签',body:'数百光年远景优先显示远处恒星；缩放到 100 光年和 20 光年附近时，中近距离系统的标签逐步出现。标签避让后由指引线连接真实位置。'}],
+    note: '恒星之间的距离保持线性比例；发光球和标记大小不是恒星真实直径。参宿四等目标的距离仍存在观测不确定性。',
+    source: 'https://simbad.cds.unistra.fr/simbad/', sourceLabel: 'CDS · SIMBAD'
+  },
   'sagittarius-a': {
     id: 'sagittarius-a', name: '人马座 A*', en: 'SAGITTARIUS A*', code: 'Sgr A*', type: '超大质量黑洞 · SUPERMASSIVE BLACK HOLE', mode: 'blackhole',
     summary: '位于银河系动力学中心的超大质量黑洞。它本身不发光，天文学家通过周围恒星的高速轨道和多波段辐射确认其质量与位置。',
@@ -74,11 +83,11 @@ export const OBJECTS = {
   betelgeuse: {
     id: 'betelgeuse', name: '参宿四', en: 'BETELGEUSE', code: 'α Ori', type: '红超巨星 · RED SUPERGIANT', mode: 'system', color: 0xff7d45, guideLabel: '外层壳',
     summary: '猎户座中醒目的红超巨星，半径远大于太阳，已经进入恒星演化晚期。它未来会发生超新星爆发，但无法准确预测时间。',
-    metrics: [['距离', '约数百光年'], ['类型', '红超巨星'], ['变光', '半规则变星'], ['演化阶段', '晚期']],
+    metrics: [['距离', '约 650–700 光年'], ['类型', '红超巨星'], ['变光', '半规则变星'], ['演化阶段', '晚期']],
     facts: ['参宿四的外层大气和尘埃活动会影响其亮度。', '“即将爆炸”在天文学语境下可能仍是很长时间。'],
     details: [{title:'膨胀与质量流失',body:'参宿四已经离开主序阶段，外层大气极度膨胀并不断向外抛射物质。模型中的多层结构表示扩展大气和尘埃壳，并非行星轨道。'},{title:'未来演化',body:'它最终会发生核心坍缩超新星，但现有观测无法给出人类日历尺度上的准确爆发日期。'}],
     note: '恒星半径存在观测不确定性，画面不用于尺寸测量。',
-    source: 'https://science.nasa.gov/universe/stars/', sourceLabel: 'NASA · Stars'
+    source: 'https://science.nasa.gov/universe/what-is-betelgeuse-inside-the-strange-volatile-star/', sourceLabel: 'NASA · Betelgeuse'
   },
   vega: {
     id: 'vega', name: '织女星', en: 'VEGA', code: 'α Lyr', type: 'A 型主序星 · MAIN-SEQUENCE STAR', mode: 'system', color: 0xd8e8ff, guideLabel: '尘埃盘',
@@ -123,6 +132,6 @@ for (const planet of PLANETS) {
   OBJECTS[planet.id] = {...planet, mode: planet.id === 'earth' ? 'earth' : 'solar', note: '行星大小和轨道间距采用教学比例；资料数值为真实物理量。'};
 }
 
-export const FEATURED_IDS = ['solar-system','sagittarius-a','earth','moon','jupiter','saturn'];
+export const FEATURED_IDS = ['solar-neighborhood','solar-system','sagittarius-a','earth','moon','jupiter','saturn'];
 export const SYSTEM_IDS = ['alpha-centauri','sirius','trappist-1','betelgeuse','vega','polaris'];
-export const SEARCH_IDS = ['galaxy','sagittarius-a','solar-system','sun',...PLANETS.map(p=>p.id),'moon',...SYSTEM_IDS];
+export const SEARCH_IDS = ['galaxy','solar-neighborhood','sagittarius-a','solar-system','sun',...PLANETS.map(p=>p.id),'moon',...SYSTEM_IDS];

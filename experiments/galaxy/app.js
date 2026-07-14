@@ -50,15 +50,18 @@ const cameraOffset = new THREE.Vector3();
 const roots = {};
 const textureCache = new Map();
 const solarBodies = new Map();
-const markerPositions = {solar:new THREE.Vector3(26,.15,0), sgr:new THREE.Vector3(0,0,0)};
-const galaxySystemMarkers = [
-  {marker:'marker-alpha-centauri',radius:24.2,tangent:3.2,height:.25,column:0,row:0,position:new THREE.Vector3()},
-  {marker:'marker-sirius',radius:23.4,tangent:-3.5,height:-.25,column:0,row:1,position:new THREE.Vector3()},
-  {marker:'marker-trappist-1',radius:28.1,tangent:4.1,height:.55,column:1,row:0,position:new THREE.Vector3()},
-  {marker:'marker-betelgeuse',radius:21.8,tangent:-5.4,height:.65,column:0,row:2,position:new THREE.Vector3()},
-  {marker:'marker-vega',radius:29.6,tangent:-2.8,height:.85,column:1,row:1,position:new THREE.Vector3()},
-  {marker:'marker-polaris',radius:30.7,tangent:5.1,height:1.15,column:1,row:2,position:new THREE.Vector3()}
+const neighborhoodBodies = new Map();
+const leaderPaths = new Map();
+const markerPositions = {neighborhood:new THREE.Vector3(26,.15,0), sgr:new THREE.Vector3(0,0,0)};
+const NEIGHBORHOOD_SYSTEMS = [
+  {id:'alpha-centauri',ra:[14,39,36.5],dec:[-60,50,2.3],distance:4.37,color:0xffe5b0,size:.34,labelMax:135},
+  {id:'sirius',ra:[6,45,8.917],dec:[-16,42,58.02],distance:8.6,color:0xcde8ff,size:.42,labelMax:165},
+  {id:'trappist-1',ra:[23,6,29.368],dec:[-5,2,29.04],distance:40,color:0xff7755,size:.28,labelMax:430},
+  {id:'vega',ra:[18,36,56.336],dec:[38,47,1.28],distance:25,color:0xd8e8ff,size:.42,labelMax:380},
+  {id:'polaris',ra:[2,31,49.095],dec:[89,15,50.79],distance:430,color:0xffefcf,size:.72,labelMax:Infinity},
+  {id:'betelgeuse',ra:[5,55,10.305],dec:[7,24,25.43],distance:650,color:0xff7d45,size:1.15,labelMax:Infinity}
 ];
+let neighborhoodOrbitGroup;
 const J2000_MS = Date.UTC(2000,0,1,12);
 
 const SPEEDS = {
@@ -67,6 +70,7 @@ const SPEEDS = {
     {label:'500 万年/秒', years:5e6},
     {label:'2000 万年/秒', years:2e7}
   ],
+  neighborhood: [{label:'J2000 坐标', visual:0}],
   solar: [
     {label:'1 日/秒', days:1},
     {label:'30 日/秒', days:30},
@@ -192,6 +196,38 @@ function createGalaxy(){
   galaxyCore=sprite(makeGlowTexture('#fff8dc','#ffba61','rgba(255,120,20,0)'),17,.78);galaxyCore.scale.y=8;root.add(galaxyCore);
   const haloGeo=new THREE.BufferGeometry();const hp=[];for(let i=0;i<(isMobile?900:2300);i++){const r=20+random()*45;const t=random()*Math.PI*2;hp.push(Math.cos(t)*r,gaussian()*3.4,Math.sin(t)*r)}haloGeo.setAttribute('position',new THREE.Float32BufferAttribute(hp,3));
   root.add(new THREE.Points(haloGeo,new THREE.PointsMaterial({size:.08,color:0x8cb6cc,transparent:true,opacity:.18,depthWrite:false})));
+}
+
+function equatorialPosition(ra,dec,distance,out=new THREE.Vector3()){
+  const raDegrees=(ra[0]+ra[1]/60+ra[2]/3600)*15;const sign=dec[0]<0?-1:1;const decDegrees=sign*(Math.abs(dec[0])+dec[1]/60+dec[2]/3600);
+  const a=THREE.MathUtils.degToRad(raDegrees);const d=THREE.MathUtils.degToRad(decDegrees);const cosD=Math.cos(d);
+  return out.set(distance*cosD*Math.cos(a),distance*Math.sin(d),distance*cosD*Math.sin(a));
+}
+
+function neighborhoodRing(radius,opacity){
+  const points=Array.from({length:192},(_,index)=>{const angle=index/192*Math.PI*2;return new THREE.Vector3(Math.cos(angle)*radius,0,Math.sin(angle)*radius)});
+  return new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(points),new THREE.LineBasicMaterial({color:0x4c91aa,transparent:true,opacity,depthWrite:false}));
+}
+
+function createNeighborhood(){
+  const root=new THREE.Group();root.visible=false;roots.neighborhood=root;scene.add(root);
+  const backgroundPositions=[];const backgroundColors=[];const color=new THREE.Color();const count=isMobile?1800:4200;
+  for(let index=0;index<count;index++){
+    const radius=18+Math.pow(random(),1/3)*720;const theta=random()*Math.PI*2;const phi=Math.acos(2*random()-1);backgroundPositions.push(radius*Math.sin(phi)*Math.cos(theta),radius*Math.cos(phi),radius*Math.sin(phi)*Math.sin(theta));
+    color.set(random()>.86?0xffd5a1:0x9fc9df);backgroundColors.push(color.r,color.g,color.b);
+  }
+  const backgroundGeometry=new THREE.BufferGeometry();backgroundGeometry.setAttribute('position',new THREE.Float32BufferAttribute(backgroundPositions,3));backgroundGeometry.setAttribute('color',new THREE.Float32BufferAttribute(backgroundColors,3));root.add(new THREE.Points(backgroundGeometry,new THREE.PointsMaterial({size:.45,vertexColors:true,transparent:true,opacity:.5,depthWrite:false,sizeAttenuation:true})));
+
+  neighborhoodOrbitGroup=new THREE.Group();neighborhoodOrbitGroup.visible=showOrbits;root.add(neighborhoodOrbitGroup);
+  for(const [radius,opacity] of [[10,.34],[50,.27],[100,.22],[500,.16]]){
+    neighborhoodOrbitGroup.add(neighborhoodRing(radius,opacity));const anchor=new THREE.Object3D();anchor.position.set(radius,0,0);anchor.userData.labelMax=radius===10?145:radius===50?430:radius===100?850:Infinity;neighborhoodOrbitGroup.add(anchor);addSceneLabel(anchor,`${radius} 光年`,'J2000 赤道距离环','neighborhood',radius===10?-12:0);
+  }
+  const axisGeometry=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-700,0,0),new THREE.Vector3(700,0,0),new THREE.Vector3(0,0,-700),new THREE.Vector3(0,0,700)]);neighborhoodOrbitGroup.add(new THREE.LineSegments(axisGeometry,new THREE.LineBasicMaterial({color:0x315465,transparent:true,opacity:.18,depthWrite:false})));
+
+  const sun=new THREE.Mesh(new THREE.SphereGeometry(.58,32,20),new THREE.MeshBasicMaterial({color:0xffc35a}));sun.userData={id:'solar-system',kind:'body'};sun.add(sprite(makeGlowTexture('#fffbe1','#ffad3d','rgba(255,120,20,0)'),7,.85));root.add(sun);interactiveObjects.push(sun);neighborhoodBodies.set('solar-system',{object:sun,distance:0});
+  for(const system of NEIGHBORHOOD_SYSTEMS){
+    const mesh=new THREE.Mesh(new THREE.SphereGeometry(system.size,28,18),new THREE.MeshBasicMaterial({color:system.color}));equatorialPosition(system.ra,system.dec,system.distance,mesh.position);mesh.userData={id:system.id,kind:'body'};mesh.add(sprite(makeGlowTexture('#ffffff',`#${system.color.toString(16).padStart(6,'0')}`,'rgba(0,0,0,0)'),Math.max(2.2,system.size*5),.68));root.add(mesh);interactiveObjects.push(mesh);neighborhoodBodies.set(system.id,{object:mesh,...system});
+  }
 }
 
 async function loadTexture(url){
@@ -488,7 +524,8 @@ function setRootVisibility(next){
 }
 
 function modeCopy(next,id){
-  if(next==='galaxy')return ['MILKY WAY / SCIENTIFIC RECONSTRUCTION','银河系 · 棒旋星系','拖动旋转，滚轮缩放；本地恒星系统围绕太阳系位置作局部放大。'];
+  if(next==='galaxy')return ['MILKY WAY / SCIENTIFIC RECONSTRUCTION','银河系 · 棒旋星系','拖动旋转，滚轮缩放；点击太阳邻域进入本地恒星空间。'];
+  if(next==='neighborhood')return ['SOLAR NEIGHBORHOOD / ICRS J2000','太阳邻域 · 本地恒星空间','距离保持线性比例；继续缩放可逐步分辨数十至数百光年内的恒星系统。'];
   if(next==='solar')return ['SOLAR SYSTEM / J2000 ORBIT MODEL','太阳系 · 八大行星','点击太阳或行星查看资料；点击地球进入地月系统。'];
   if(next==='earth')return ['EARTH–MOON SYSTEM / TEACHING SCALE','地月系 · 相互绕行','远景天体按地球视角方向排列，视直径为便于辨认而增强。'];
   if(next==='blackhole')return ['GALACTIC CENTER / RELATIVISTIC VISUALIZATION','人马座 A* · 银河系中心','阴影、光子环与被引力透镜弯曲的吸积盘为定性科学可视化，并非直接照片。'];
@@ -499,8 +536,11 @@ function updateModeUI(next,id){
   document.body.className=`mode-${next}${document.body.classList.contains('no-labels')?' no-labels':''}`;
   document.body.classList.toggle('catalog-collapsed',catalogPanelCollapsed);
   const copy=modeCopy(next,id);$('mode-kicker').textContent=copy[0];$('mode-title').textContent=copy[1];$('mode-description').textContent=copy[2];
-  $('render-status').textContent=next==='galaxy'?'GALACTIC MODEL':next==='solar'?'ORBITAL MODEL':next==='earth'?'EARTH–MOON MODEL':next==='blackhole'?'GALACTIC CENTER':'STELLAR MODEL';
-  $('orbit-label').textContent=next==='system'?(OBJECTS[id].guideLabel||'轨道'):'轨道';
+  $('render-status').textContent=next==='galaxy'?'GALACTIC MODEL':next==='neighborhood'?'LOCAL STELLAR MAP':next==='solar'?'ORBITAL MODEL':next==='earth'?'EARTH–MOON MODEL':next==='blackhole'?'GALACTIC CENTER':'STELLAR MODEL';
+  $('orbit-label').textContent=next==='neighborhood'?'距离环':next==='system'?(OBJECTS[id].guideLabel||'轨道'):'轨道';
+  $('time-label').textContent=next==='neighborhood'?'观察尺度':'模型时间';scene.fog.density=next==='neighborhood'?.00035:.00125;
+  $('interaction-hint').textContent=next==='neighborhood'?'拖动旋转 · 滚轮跨光年缩放 · 点击恒星系统':'拖动旋转 · 滚轮缩放 · 点击天体';
+  const playButton=$('play-button');playButton.disabled=next==='neighborhood';playButton.querySelector('span').textContent=next==='neighborhood'?'◎':playing?'Ⅱ':'▶';playButton.querySelector('small').textContent=next==='neighborhood'?'静态坐标':playing?'暂停':'播放';
   $('system-strip').hidden=next!=='solar'&&next!=='earth';
   updateSystemStrip();
   speedIndex=0;updateSpeedLabel();updateBreadcrumb(next,id);
@@ -508,6 +548,7 @@ function updateModeUI(next,id){
 
 function cameraPreset(next){
   if(next==='galaxy')return {pos:new THREE.Vector3(0,78,60),target:new THREE.Vector3(),min:16,max:210};
+  if(next==='neighborhood')return {pos:new THREE.Vector3(700,510,1215),target:new THREE.Vector3(),min:2,max:2100};
   if(next==='solar')return {pos:new THREE.Vector3(0,98,122),target:new THREE.Vector3(),min:10,max:210};
   if(next==='earth')return {pos:new THREE.Vector3(0,10,32),target:new THREE.Vector3(),min:7,max:52};
   if(next==='blackhole')return {pos:new THREE.Vector3(0,6.5,31),target:new THREE.Vector3(),min:9,max:75};
@@ -520,6 +561,7 @@ function animateCamera(pos,target,duration=900){
 
 function setMode(next,id,instant=false){
   if(next===mode && next!=='system'&&!instant){
+    if(next==='neighborhood'){focusNeighborhoodOverview();return}
     if(next==='solar'&&id==='solar-system'){focusSolarOverview();return}
     if(next==='earth'){focusEarthBody(id);return}
     showInfo(id);if(next==='solar')focusSolarBody(id);return
@@ -532,20 +574,25 @@ function setMode(next,id,instant=false){
     if(!instant)setTimeout(()=>$('travel-screen').classList.remove('active'),280);
   };
   if(instant){finish();return}
-  const d=OBJECTS[id];$('travel-title').textContent=d.name;$('travel-distance').textContent=next==='solar'?'从猎户臂进入行星尺度':next==='earth'?'从行星尺度进入地月尺度':next==='blackhole'?'接近银河系动力学中心':'正在切换恒星系统尺度';$('travel-screen').classList.add('active');
+  const d=OBJECTS[id];$('travel-title').textContent=d.name;$('travel-distance').textContent=next==='neighborhood'?'从猎户臂进入太阳周围 700 光年':next==='solar'?'从恒星邻域进入行星尺度':next==='earth'?'从行星尺度进入地月尺度':next==='blackhole'?'接近银河系动力学中心':'正在切换恒星系统尺度';$('travel-screen').classList.add('active');
   setTimeout(finish,430);
 }
 
 function navigateTo(id,instant=false){
   const d=OBJECTS[id];if(!d)return;
   if(id==='galaxy'){setMode('galaxy','galaxy',instant);return}
+  if(id==='solar-neighborhood'){setMode('neighborhood',id,instant);return}
   if(id==='sagittarius-a'){setMode('blackhole',id,instant);return}
-  if(id==='solar-system'){setMode('solar',id,instant);return}
+  if(id==='solar-system'){if(mode==='galaxy')setMode('neighborhood','solar-neighborhood',instant);else setMode('solar',id,instant);return}
   if(id==='earth'||id==='moon'){setMode('earth',id,instant);return}
   if(d.mode==='system'){setMode('system',id,instant);return}
   if(id==='sun'||PLANETS.some(p=>p.id===id)){
     if(mode!=='solar'){setMode('solar',id,instant);setTimeout(()=>focusSolarBody(id),instant?0:780)}else focusSolarBody(id);
   }
+}
+
+function focusNeighborhoodOverview(){
+  const preset=cameraPreset('neighborhood');selectedId='solar-neighborhood';followObject=null;previousFollow.set(0,0,0);controls.minDistance=preset.min;controls.maxDistance=preset.max;animateCamera(preset.pos,preset.target,900);showInfo('solar-neighborhood');updateBreadcrumb('neighborhood','solar-neighborhood');
 }
 
 function focusSolarOverview(){
@@ -604,10 +651,11 @@ function showInfo(id){
 function updateBreadcrumb(next,id){
   let html='<button data-nav="galaxy">银河系</button>';
   if(next==='galaxy')html+='<i>›</i><span>总览</span>';
+  else if(next==='neighborhood')html+='<i>›</i><span>猎户臂</span><i>›</i><span>太阳邻域</span>';
   else if(next==='blackhole')html+='<i>›</i><span>银河中心</span><i>›</i><span>人马座 A*</span>';
-  else if(next==='solar')html+='<i>›</i><span>猎户臂</span><i>›</i><button data-target="solar-system">太阳系</button>';
-  else if(next==='earth')html+=`<i>›</i><button data-target="solar-system">太阳系</button><i>›</i><span>地月系</span><i>›</i><span>${OBJECTS[id]?.name||'地球'}</span>`;
-  else html+=`<i>›</i><span>${OBJECTS[id].name}</span>`;
+  else if(next==='solar')html+='<i>›</i><button data-target="solar-neighborhood">太阳邻域</button><i>›</i><button data-target="solar-system">太阳系</button>';
+  else if(next==='earth')html+=`<i>›</i><button data-target="solar-neighborhood">太阳邻域</button><i>›</i><button data-target="solar-system">太阳系</button><i>›</i><span>地月系</span><i>›</i><span>${OBJECTS[id]?.name||'地球'}</span>`;
+  else html+=`<i>›</i><button data-target="solar-neighborhood">太阳邻域</button><i>›</i><span>${OBJECTS[id].name}</span>`;
   $('breadcrumb').innerHTML=html;
 }
 
@@ -631,38 +679,46 @@ function search(query){
 function updateSpeedLabel(){const presets=SPEEDS[mode]||SPEEDS.galaxy;const p=presets[speedIndex%presets.length];$('speed-button').querySelector('b').textContent=p.label}
 function formatTime(){
   if(mode==='galaxy')return `J2000 + ${(galaxyYears/10000).toFixed(galaxyYears<100000?1:0)} 万年`;
+  if(mode==='neighborhood'){const distance=camera.position.distanceTo(controls.target);const value=distance>=100?Math.round(distance/10)*10:distance>=20?Math.round(distance):distance.toFixed(1);return `视距约 ${value} 光年 · 1 单位 = 1 光年`}
   if(mode==='blackhole')return '相对时间 · 教学模拟';
   const ms=J2000_MS+simDays*86400000;const date=new Date(ms);return Number.isFinite(date.getTime())?date.toLocaleDateString('zh-CN',{timeZone:'UTC'}):'轨道时间超出范围';
 }
 
+function ensureLeaderPath(id){
+  if(leaderPaths.has(id))return leaderPaths.get(id);const path=document.createElementNS('http://www.w3.org/2000/svg','path');path.dataset.target=id;$('marker-leaders').append(path);leaderPaths.set(id,path);const marker=$(`marker-${id}`);
+  if(marker){marker.addEventListener('pointerenter',()=>path.classList.add('active'));marker.addEventListener('pointerleave',()=>path.classList.remove('active'));marker.addEventListener('focus',()=>path.classList.add('active'));marker.addEventListener('blur',()=>path.classList.remove('active'))}
+  return path;
+}
+
+function layoutNeighborhoodLabels(items){
+  if(!items.length)return;const catalogRight=catalogPanelCollapsed?24:$('catalog-panel').getBoundingClientRect().right+18;const infoLeft=infoPanelCollapsed?innerWidth-24:$('info-panel').getBoundingClientRect().left-18;const minX=Math.max(18,catalogRight);const maxX=Math.max(minX+140,infoLeft);const mid=(minX+maxX)/2;const top=155;const bottom=Math.max(top+80,innerHeight-165);const groups={left:[],right:[]};
+  for(const item of items){item.side=item.screenX<mid?'right':'left';item.targetX=item.side==='right'?Math.min(item.screenX+22,maxX-126):Math.max(item.screenX-144,minX);item.targetY=Math.min(bottom,Math.max(top,item.screenY));groups[item.side].push(item)}
+  for(const group of Object.values(groups)){
+    group.sort((a,b)=>a.targetY-b.targetY);for(let index=1;index<group.length;index++)group[index].targetY=Math.max(group[index].targetY,group[index-1].targetY+39);if(group.length&&group.at(-1).targetY>bottom){group.at(-1).targetY=bottom;for(let index=group.length-2;index>=0;index--)group[index].targetY=Math.min(group[index].targetY,group[index+1].targetY-39)}
+    for(const item of group){const span=item.el.querySelector('span');item.el.style.setProperty('--label-shift-x',`${item.targetX-item.screenX-18}px`);item.el.style.setProperty('--label-shift-y',`${item.targetY-item.screenY}px`);const width=Math.max(118,span?.offsetWidth||118);const anchorX=item.side==='right'?item.targetX:item.targetX+width;const elbowX=item.screenX+(anchorX-item.screenX)*.45;item.path.setAttribute('d',`M ${item.screenX.toFixed(1)} ${item.screenY.toFixed(1)} L ${elbowX.toFixed(1)} ${item.screenY.toFixed(1)} L ${anchorX.toFixed(1)} ${item.targetY.toFixed(1)}`);item.path.style.opacity='1'}
+  }
+}
+
 function updateMarkers(){
-  const entries=[];
+  for(const path of leaderPaths.values())path.style.opacity='0';const entries=[];
   if(mode==='galaxy'){
-    const a=galaxyDisk?.rotation.y||0;markerPositions.solar.set(Math.cos(a)*26,.15,-Math.sin(a)*26);
-    entries.push(['marker-solar',markerPositions.solar],['marker-sgr',markerPositions.sgr]);
-    for(const marker of galaxySystemMarkers){
-      marker.position.set(
-        Math.cos(a)*marker.radius+Math.sin(a)*marker.tangent,
-        marker.height,
-        -Math.sin(a)*marker.radius+Math.cos(a)*marker.tangent
-      );
-      entries.push([marker.marker,marker.position,marker]);
-    }
+    const a=galaxyDisk?.rotation.y||0;markerPositions.neighborhood.set(Math.cos(a)*26,.15,-Math.sin(a)*26);entries.push(['marker-neighborhood',markerPositions.neighborhood],['marker-sgr',markerPositions.sgr]);
+  }else if(mode==='neighborhood'){
+    entries.push(['marker-solar',new THREE.Vector3()]);const cameraDistance=camera.position.distanceTo(controls.target);
+    for(const system of NEIGHBORHOOD_SYSTEMS){const body=neighborhoodBodies.get(system.id);if(!body)continue;const position=new THREE.Vector3();body.object.getWorldPosition(position);entries.push([`marker-${system.id}`,position,{labelVisible:cameraDistance<=system.labelMax,path:ensureLeaderPath(system.id)}])}
   }else if(mode==='earth'&&roots.earth?.userData.moon){
     const moonPosition=new THREE.Vector3();roots.earth.userData.moon.getWorldPosition(moonPosition);entries.push(['marker-moon',moonPosition]);
   }else return;
-  entries.forEach(([id,p,layout])=>{
+  const labelItems=[];entries.forEach(([id,p,layout])=>{
     const el=$(id);const v=p.clone().project(camera);const visible=v.z>-1&&v.z<1&&Math.abs(v.x)<1.08&&Math.abs(v.y)<1.08;const screenX=(v.x*.5+.5)*innerWidth;const screenY=(-v.y*.5+.5)*innerHeight;el.style.opacity=visible?'1':'0';el.style.pointerEvents=visible?'auto':'none';el.style.left=`${screenX}px`;el.style.top=`${screenY}px`;
-    if(layout){
-      const catalogRight=catalogPanelCollapsed?30:$('catalog-panel').getBoundingClientRect().right+28;const infoLeft=infoPanelCollapsed?innerWidth-30:$('info-panel').getBoundingClientRect().left-22;const available=infoLeft-catalogRight;const compact=available<450;const index=layout.column*3+layout.row;const targetX=compact?infoLeft-128:catalogRight+available*(layout.column===0?.62:.82);const targetY=compact?innerHeight*.3+index*44:innerHeight*.42+layout.row*54;
-      el.style.setProperty('--label-shift-x',`${targetX-screenX-18}px`);el.style.setProperty('--label-shift-y',`${targetY-screenY}px`);
-    }else{el.style.removeProperty('--label-shift-x');el.style.removeProperty('--label-shift-y')}
+    if(layout){const showLabel=visible&&layout.labelVisible;el.classList.toggle('label-hidden',!showLabel);if(showLabel)labelItems.push({el,path:layout.path,screenX,screenY})}else{el.style.removeProperty('--label-shift-x');el.style.removeProperty('--label-shift-y')}
   });
+  if(mode==='neighborhood')layoutNeighborhoodLabels(labelItems);
 }
 
 function updateSystemLabels(){
   for(const {object,el,modeKey,offsetY} of sceneLabels){
-    if(modeKey!==mode||!object.parent){el.style.opacity='0';continue}
+    let node=object,worldVisible=true;while(node){if(!node.visible){worldVisible=false;break}node=node.parent}const withinLabelRange=modeKey!=='neighborhood'||camera.position.distanceTo(controls.target)<=(object.userData.labelMax??Infinity);if(modeKey!==mode||!object.parent||!worldVisible||!withinLabelRange){el.style.opacity='0';continue}
     const p=new THREE.Vector3();object.getWorldPosition(p);const v=p.project(camera);const visible=v.z>-1&&v.z<1&&Math.abs(v.x)<1.04&&Math.abs(v.y)<1.04;el.style.opacity=visible?'1':'0';el.style.transform=`translate(${(v.x*.5+.5)*innerWidth}px,${(-v.y*.5+.5)*innerHeight+(offsetY||0)}px)`;
   }
 }
@@ -704,13 +760,13 @@ document.addEventListener('click',event=>{
   const nav=event.target.closest('[data-nav]');if(nav?.dataset.nav==='galaxy')navigateTo('galaxy');
 });
 $('search-input').addEventListener('input',e=>search(e.target.value));$('search-input').addEventListener('keydown',e=>{if(e.key==='Enter'){const first=$('search-results').querySelector('[data-target]');if(first)navigateTo(first.dataset.target);e.target.value='';$('search-results').hidden=true}else if(e.key==='Escape'){$('search-results').hidden=true;e.target.blur()}});
-document.addEventListener('keydown',e=>{if(e.key==='/'&&!/input|textarea/i.test(document.activeElement.tagName)){e.preventDefault();$('search-input').focus()}if(e.key==='Escape'&&document.activeElement!==$('search-input')){if(mode==='earth'||mode==='blackhole'||mode==='system')navigateTo(mode==='earth'?'solar-system':'galaxy')}});
+document.addEventListener('keydown',e=>{if(e.key==='/'&&!/input|textarea/i.test(document.activeElement.tagName)){e.preventDefault();$('search-input').focus()}if(e.key==='Escape'&&document.activeElement!==$('search-input')){if(mode==='earth')navigateTo('solar-system');else if(mode==='neighborhood'||mode==='blackhole')navigateTo('galaxy');else if(mode==='system')navigateTo('solar-neighborhood')}});
 document.querySelectorAll('.catalog-tabs button').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.catalog-tabs button').forEach(x=>x.classList.toggle('active',x===b));renderCatalog(b.dataset.catalog)}));
 $('info-brief').addEventListener('click',()=>{infoDetailed=false;updateInfoDepth()});
 $('info-detail').addEventListener('click',()=>{infoDetailed=true;updateInfoDepth()});
-$('play-button').addEventListener('click',()=>{playing=!playing;$('play-button').querySelector('span').textContent=playing?'Ⅱ':'▶';$('play-button').querySelector('small').textContent=playing?'暂停':'播放'});
+$('play-button').addEventListener('click',()=>{if(mode==='neighborhood')return;playing=!playing;$('play-button').querySelector('span').textContent=playing?'Ⅱ':'▶';$('play-button').querySelector('small').textContent=playing?'暂停':'播放'});
 $('speed-button').addEventListener('click',()=>{speedIndex=(speedIndex+1)%SPEEDS[mode].length;updateSpeedLabel()});
-$('orbit-button').addEventListener('click',()=>{showOrbits=!showOrbits;$('orbit-button').classList.toggle('active',showOrbits);$('orbit-button').setAttribute('aria-pressed',String(showOrbits));for(const body of solarBodies.values())if(body.orbit)body.orbit.visible=showOrbits;if(roots.earth?.userData.moonOrbit)roots.earth.userData.moonOrbit.visible=showOrbits;if(genericOrbitGroup)genericOrbitGroup.visible=showOrbits;if(blackOrbitGroup&&mode==='blackhole')blackOrbitGroup.visible=showOrbits});
+$('orbit-button').addEventListener('click',()=>{showOrbits=!showOrbits;$('orbit-button').classList.toggle('active',showOrbits);$('orbit-button').setAttribute('aria-pressed',String(showOrbits));for(const body of solarBodies.values())if(body.orbit)body.orbit.visible=showOrbits;if(neighborhoodOrbitGroup)neighborhoodOrbitGroup.visible=showOrbits;if(roots.earth?.userData.moonOrbit)roots.earth.userData.moonOrbit.visible=showOrbits;if(genericOrbitGroup)genericOrbitGroup.visible=showOrbits;if(blackOrbitGroup&&mode==='blackhole')blackOrbitGroup.visible=showOrbits});
 $('label-button').addEventListener('click',()=>{document.body.classList.toggle('no-labels');const visible=!document.body.classList.contains('no-labels');$('label-button').classList.toggle('active',visible);$('label-button').setAttribute('aria-pressed',String(visible))});
 $('quality-button').addEventListener('click',()=>{quality=quality==='auto'?'high':quality==='high'?'low':'auto';applyQuality()});
 $('home-button').addEventListener('click',()=>navigateTo('galaxy'));
@@ -727,14 +783,15 @@ $('model-info').addEventListener('click',()=>$('model-dialog').showModal());$('d
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();applyQuality()});
 
 async function init(){
+  const initial=location.hash.slice(1);
   updateLoading(8);createBackground();updateLoading(18,'正在生成银河旋臂','DISTRIBUTING STARS AND DUST');createGalaxy();
-  updateLoading(28,'正在读取天体资料','NASA / JPL / USGS DATA');
+  updateLoading(28,'正在建立太阳邻域','ICRS J2000 / LIGHT-YEAR SCALE');createNeighborhood();
   await createSolarSystem();updateLoading(82,'正在建立地月系统','LOADING EARTH–MOON SYSTEM');await createEarthSystem();
   createBlackHole();updateLoading(94,'正在校准相机','CALIBRATING OBSERVATION SCALES');
   updateSolar();updateSystemStrip();renderCatalog();setMode('galaxy','galaxy',true);showInfo('galaxy');
   updateLoading(100,'银河坐标系已就绪','MODEL READY');
   setTimeout(()=>{$('loading').classList.add('done');window.__galaxyReady=true},450);
-  const initial=location.hash.slice(1);if(initial&&OBJECTS[initial]&&initial!=='galaxy')setTimeout(()=>navigateTo(initial),900);
+  if(initial&&OBJECTS[initial]&&initial!=='galaxy')setTimeout(()=>navigateTo(initial),900);
   requestAnimationFrame(animate);
 }
 init().catch(error=>{console.error(error);window.__showGalaxyError(error?.message||'MODEL INITIALIZATION ERROR')});

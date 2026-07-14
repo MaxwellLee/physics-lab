@@ -37,7 +37,7 @@
       <button data-catalog="systems">恒星系统</button>
     </div>
     <div class="target-list" id="target-list"></div>
-    <p class="catalog-note">银河系总览中的本地恒星系统围绕太阳系作局部放大；标记大小采用教学比例。</p>
+    <p class="catalog-note">银河总览只定位太阳邻域；附近恒星在独立的线性光年坐标中展示。</p>
   </aside>
 
   <button class="mobile-catalog" id="mobile-catalog" aria-label="打开目标导航">⌕ <span>目标</span></button>
@@ -61,7 +61,8 @@
   <button class="info-reopen" id="info-reopen" hidden>i <span>资料</span></button>
 
   <div class="marker-layer" id="marker-layer" aria-hidden="false">
-    <button class="space-marker major" id="marker-solar" data-target="solar-system"><i></i><span><b>太阳系</b><small>ORION SPUR</small></span></button>
+    <button class="space-marker major" id="marker-neighborhood" data-target="solar-neighborhood"><i></i><span><b>太阳邻域</b><small>ORION SPUR · ZOOM IN</small></span></button>
+    <button class="space-marker major" id="marker-solar" data-target="solar-system"><i></i><span><b>太阳系</b><small>LOCAL ORIGIN · ZOOM IN</small></span></button>
     <button class="space-marker danger" id="marker-sgr" data-target="sagittarius-a"><i></i><span><b>人马座 A*</b><small>GALACTIC CENTER</small></span></button>
     <button class="space-marker stellar" id="marker-alpha-centauri" data-target="alpha-centauri"><i></i><span><b>南门二系统</b><small>LOCAL NEIGHBORHOOD</small></span></button>
     <button class="space-marker stellar" id="marker-sirius" data-target="sirius"><i></i><span><b>天狼星系统</b><small>LOCAL NEIGHBORHOOD</small></span></button>
@@ -71,6 +72,7 @@
     <button class="space-marker stellar" id="marker-polaris" data-target="polaris"><i></i><span><b>北极星</b><small>LOCAL NEIGHBORHOOD</small></span></button>
     <button class="space-marker major" id="marker-moon" data-target="moon"><i></i><span><b>月球</b><small>384,400 KM</small></span></button>
   </div>
+  <svg class="marker-leaders" id="marker-leaders" aria-hidden="true"></svg>
   <div class="system-label-layer" id="system-label-layer" aria-hidden="true"></div>
 
   <div class="mode-caption">
@@ -90,7 +92,7 @@
     <button id="home-button"><span>◎</span><small>银河系</small></button>
   </section>
 
-  <div class="time-readout"><small>模型时间</small><b id="time-value">J2000 + 0 年</b></div>
+  <div class="time-readout"><small id="time-label">模型时间</small><b id="time-value">J2000 + 0 年</b></div>
   <div class="interaction-hint" id="interaction-hint">拖动旋转 · 滚轮缩放 · 点击天体</div>
 
   <dialog id="model-dialog">
