@@ -11,9 +11,9 @@ export const OBJECTS = {
     id: 'sagittarius-a', name: '人马座 A*', en: 'SAGITTARIUS A*', code: 'Sgr A*', type: '超大质量黑洞 · SUPERMASSIVE BLACK HOLE', mode: 'blackhole',
     summary: '位于银河系动力学中心的超大质量黑洞。它本身不发光，天文学家通过周围恒星的高速轨道和多波段辐射确认其质量与位置。',
     metrics: [['质量', '约 400 万个太阳'], ['距地球', '约 2.6 万光年'], ['位置', '银河系中心'], ['状态', '相对平静']],
-    facts: ['事件视界以内的光无法逃逸。', '周围恒星轨道是测定其质量的重要证据。', '它不是虫洞，也不会像吸尘器一样吞噬整座银河系。'],
-    note: '近景为基于广义相对论特征的教学可视化，并非直接光学照片；发光盘表示被加热的周围物质。',
-    source: 'https://science.nasa.gov/universe/black-holes/types/', sourceLabel: 'NASA · Black Hole Types'
+    facts: ['画面中央是黑洞阴影，不是事件视界本身；引力透镜使阴影看起来更大。', '吸积盘远侧的光被弯曲到阴影上方和下方；靠近阴影的细环是多重光子环影像。', '朝向观察者运动的一侧因相对论性多普勒束射而更亮、更偏白。'],
+    note: '近景采用定性正确的简化光学模型，不是完整广义相对论光线追踪，也不是人马座 A* 的直接光学照片。其吸积盘亮度被刻意增强；真实的人马座 A* 目前相对平静。',
+    source: 'https://science.nasa.gov/universe/black-holes/anatomy/', sourceLabel: 'NASA · Anatomy of a Black Hole'
   },
   'solar-system': {
     id: 'solar-system', name: '太阳系', en: 'SOLAR SYSTEM', code: 'SOL', type: '行星系统 · PLANETARY SYSTEM', mode: 'solar',

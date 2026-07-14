@@ -5,7 +5,8 @@ This experiment separates measured values, observation-derived maps, and teachin
 ## Scientific model and facts
 
 - Milky Way structure, scale, stellar population, and the Sun's galactic orbit: [NASA Galaxies](https://science.nasa.gov/universe/galaxies/), [NASA Solar System Facts](https://science.nasa.gov/solar-system/solar-system-facts/)
-- Sagittarius A* classification and approximate mass: [NASA Black Hole Types](https://science.nasa.gov/universe/black-holes/types/), [NASA Galactic Center explainer](https://science.nasa.gov/mission/webb/science-overview/science-explainers/what-is-the-center-of-our-galaxy-like/)
+- Sagittarius A* classification, approximate mass, and observed ring/shadow: [NASA Black Hole Types](https://science.nasa.gov/universe/black-holes/types/), [NASA Galactic Center explainer](https://science.nasa.gov/mission/webb/science-overview/science-explainers/what-is-the-center-of-our-galaxy-like/), and the [Event Horizon Telescope Sgr A* result](https://eventhorizontelescope.org/blog/astronomers-reveal-first-image-black-hole-heart-our-galaxy)
+- Black-hole shadow, photon rings, lensed far-side disk images, and relativistic Doppler beaming: [NASA Anatomy of a Black Hole](https://science.nasa.gov/universe/black-holes/anatomy/) and [NASA Black Hole Accretion Disk Visualization](https://svs.gsfc.nasa.gov/13326/). The [Wikipedia Black hole overview](https://en.wikipedia.org/wiki/Black_hole) was also reviewed because it was supplied as the requested visual reference; primary NASA/EHT material governs the implementation.
 - Solar and planetary facts: [NASA Solar System](https://science.nasa.gov/solar-system/), individual NASA planet fact pages, and [NASA Basics of Space Flight](https://science.nasa.gov/learn/basics-of-space-flight/chapter1-2/)
 - Orbital relationships: [NASA Orbits and Kepler's Laws](https://science.nasa.gov/solar-system/orbits-and-keplers-laws/)
 - Exoplanet system facts: NASA Exoplanet Exploration pages. Exoplanet surfaces are schematic because reliable surface images do not exist.
@@ -26,7 +27,7 @@ Planet positions are advanced from approximate J2000 orbital elements with a Kep
 ## Rendered visualizations
 
 - The Milky Way is a procedural particle reconstruction of a barred spiral galaxy with a central bulge, thin stellar disk, spiral-arm concentration, and sparse halo. It is not an external photograph of the Milky Way.
-- The Sagittarius A* close-up uses a procedural event-horizon silhouette, photon-ring cue, and animated accretion-flow visualization. Sagittarius A* is comparatively quiet, so this is a scale-learning view rather than a claim that it currently has a bright disk of this appearance.
+- The Sagittarius A* close-up uses a procedural, view-dependent teaching shader: a circular black-hole shadow larger than the represented horizon scale, multiple progressively thinner photon-ring images, direct and gravitationally lensed far-side disk images, turbulent radial filaments, and relativistic Doppler-brightness asymmetry. It is a qualitatively correct simplified optical model, not full general-relativistic ray tracing. Sagittarius A* is comparatively quiet, so the disk brightness is intentionally exaggerated for scale learning rather than a claim that it currently has a bright optical disk of this appearance.
 - Saturn's rings are a procedural teaching texture. Their relative extent is approximate; individual ring particles are not resolved.
 - Uranus's rings and all generic exoplanet appearances are schematic.
 

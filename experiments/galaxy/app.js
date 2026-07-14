@@ -41,6 +41,7 @@ let textureProgress = 0;
 const clock = new THREE.Clock();
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
+const cameraOffset = new THREE.Vector3();
 const roots = {};
 const textureCache = new Map();
 const solarBodies = new Map();
@@ -240,17 +241,130 @@ async function createEarthSystem(){
   root.userData={earth,clouds,moonHolder,moon,moonOrbit};
 }
 
-let blackDiskMaterial,blackOrbitGroup;
+let blackLensingMaterial,blackLensingPlane,blackOrbitGroup;
 function createBlackHole(){
   const root=new THREE.Group();root.visible=false;roots.blackhole=root;scene.add(root);
   const cluster=[];const cc=[];for(let i=0;i<(isMobile?1400:3200);i++){const r=4+Math.pow(random(),1.8)*36;const t=random()*Math.PI*2;cluster.push(Math.cos(t)*r,gaussian()*(.5+r*.03),Math.sin(t)*r);cc.push(1,.52+random()*.4,.25+random()*.5)}
-  const cg=new THREE.BufferGeometry();cg.setAttribute('position',new THREE.Float32BufferAttribute(cluster,3));cg.setAttribute('color',new THREE.Float32BufferAttribute(cc,3));blackOrbitGroup=new THREE.Points(cg,new THREE.PointsMaterial({size:.16,vertexColors:true,transparent:true,opacity:.8,depthWrite:false,blending:THREE.AdditiveBlending}));root.add(blackOrbitGroup);
-  const hole=new THREE.Mesh(new THREE.SphereGeometry(2.6,64,40),new THREE.MeshBasicMaterial({color:0x000000}));hole.userData={id:'sagittarius-a',kind:'body'};root.add(hole);interactiveObjects.push(hole);
-  const ring=new THREE.Mesh(new THREE.TorusGeometry(3.05,.11,14,160),new THREE.MeshBasicMaterial({color:0xffc875,transparent:true,opacity:.92,blending:THREE.AdditiveBlending,depthWrite:false}));ring.rotation.x=Math.PI/2;root.add(ring);
-  const dg=new THREE.RingGeometry(3.15,12,256,5);
-  blackDiskMaterial=new THREE.ShaderMaterial({transparent:true,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending,uniforms:{uTime:{value:0}},vertexShader:`varying vec2 vUv;varying vec3 vPos;void main(){vUv=uv;vPos=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,fragmentShader:`uniform float uTime;varying vec2 vUv;varying vec3 vPos;void main(){float r=length(vPos.xy);float a=atan(vPos.y,vPos.x);float bands=.64+.36*sin(r*5.-a*3.+uTime*2.);float edge=smoothstep(12.,9.6,r)*smoothstep(3.15,4.0,r);vec3 hot=mix(vec3(1.,.17,.025),vec3(1.,.9,.52),pow(1.-clamp((r-3.2)/8.8,0.,1.),2.));float alpha=edge*bands*(.28+.72*(1.-clamp((r-3.2)/8.8,0.,1.)));gl_FragColor=vec4(hot*alpha,alpha);}`});
-  const disk=new THREE.Mesh(dg,blackDiskMaterial);disk.rotation.x=Math.PI/2.28;disk.rotation.z=.15;root.add(disk);
-  const glow=sprite(makeGlowTexture('#fff0bd','#ff692d','rgba(255,45,8,0)'),31,.32);glow.scale.y=12;root.add(glow);root.add(hole);root.add(ring);
+  const cg=new THREE.BufferGeometry();cg.setAttribute('position',new THREE.Float32BufferAttribute(cluster,3));cg.setAttribute('color',new THREE.Float32BufferAttribute(cc,3));blackOrbitGroup=new THREE.Points(cg,new THREE.PointsMaterial({size:.1,vertexColors:true,transparent:true,opacity:.4,depthWrite:false,blending:THREE.AdditiveBlending}));blackOrbitGroup.renderOrder=0;root.add(blackOrbitGroup);
+
+  // The visible dark region is the lensing shadow, not the event horizon itself.
+  // This smaller sphere preserves a ray-cast target and represents the horizon scale.
+  const hole=new THREE.Mesh(new THREE.SphereGeometry(1.22,48,30),new THREE.MeshBasicMaterial({color:0x000000}));hole.userData={id:'sagittarius-a',kind:'body'};root.add(hole);interactiveObjects.push(hole);
+
+  const vertexShader=`
+    varying vec2 vUv;
+    void main(){
+      vUv=uv;
+      gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);
+    }
+  `;
+  const fragmentShader=`
+    precision highp float;
+    uniform float uTime;
+    uniform float uElevation;
+    varying vec2 vUv;
+
+    float hash21(vec2 p){
+      p=fract(p*vec2(123.34,456.21));
+      p+=dot(p,p+45.32);
+      return fract(p.x*p.y);
+    }
+    float noise21(vec2 p){
+      vec2 i=floor(p),f=fract(p);
+      f=f*f*(3.0-2.0*f);
+      return mix(mix(hash21(i),hash21(i+vec2(1.0,0.0)),f.x),mix(hash21(i+vec2(0.0,1.0)),hash21(i+1.0),f.x),f.y);
+    }
+    float annulus(float r,float innerRadius,float outerRadius){
+      return smoothstep(innerRadius,innerRadius+.025,r)*(1.0-smoothstep(outerRadius-.05,outerRadius,r));
+    }
+    float filaments(float radial,float angle,float phase){
+      vec2 flow=vec2(cos(angle),sin(angle))*(radial*9.0)+vec2(radial*13.0,phase*.17);
+      float n=noise21(flow)+.5*noise21(flow*2.07+13.4);
+      float fine=.5+.5*sin(radial*84.0-angle*6.0+phase*1.2+n*3.0);
+      float lanes=.5+.5*sin(radial*34.0+angle*2.4-phase*.48+n*2.0);
+      float knots=.62+.38*noise21(vec2(angle*5.5-phase*.22,radial*31.0));
+      return mix(.3,1.0,pow(fine,1.05))*mix(.68,1.0,lanes)*mix(.78,1.0,knots);
+    }
+    vec3 diskColor(float radial,float x,float textureValue){
+      float heat=1.0-smoothstep(.34,1.38,radial);
+      vec3 ember=vec3(.12,.003,.001);
+      vec3 orange=vec3(1.35,.105,.008);
+      vec3 whiteHot=vec3(3.5,1.45,.32);
+      vec3 color=mix(ember,orange,smoothstep(.02,.72,heat));
+      color=mix(color,whiteHot,pow(heat,3.1));
+      float beam=mix(.34,1.48,smoothstep(1.25,-1.25,x));
+      beam=mix(beam,1.0,smoothstep(.18,.82,uElevation));
+      color*=beam*(.25+.95*textureValue);
+      color.b+=max(beam-1.0,0.0)*heat*.22;
+      return color;
+    }
+    void addLayer(inout vec3 color,inout float alpha,vec3 layerColor,float layerAlpha){
+      color=mix(color,layerColor,clamp(layerAlpha,0.0,1.0));
+      alpha=layerAlpha+alpha*(1.0-layerAlpha);
+    }
+
+    void main(){
+      vec2 p=vec2((vUv.x-.5)*3.1,(vUv.y-.5)*2.0);
+      float r=length(p);
+      float angle=atan(p.y,p.x);
+      float faceOn=smoothstep(.18,.82,uElevation);
+      vec3 color=vec3(0.0);
+      float alpha=0.0;
+
+      // Far-side disk images, bent above and below the shadow by strong lensing.
+      vec2 upperQ=vec2(p.x,(p.y-.005)/.48);
+      float upperR=length(upperQ);
+      float upperMask=annulus(upperR,.35,1.38)*smoothstep(.015,.105,p.y)*(1.0-faceOn);
+      float upperTexture=filaments(upperR,atan(upperQ.y,upperQ.x),uTime);
+      addLayer(color,alpha,diskColor(upperR,p.x,upperTexture),upperMask*(.28+.72*upperTexture));
+
+      vec2 lowerQ=vec2(p.x,(p.y+.015)/.43);
+      float lowerR=length(lowerQ);
+      float lowerMask=annulus(lowerR,.34,1.22)*(1.0-smoothstep(-.10,.005,p.y))*(1.0-faceOn);
+      float lowerTexture=filaments(lowerR,-atan(lowerQ.y,lowerQ.x),uTime+2.7);
+      addLayer(color,alpha,diskColor(lowerR,p.x,lowerTexture)*.62,lowerMask*(.12+.48*lowerTexture));
+
+      // The direct thin disk. Its far half is occulted by the shadow; its near half crosses in front.
+      float projectedThickness=mix(.115,1.0,faceOn);
+      vec2 diskQ=vec2(p.x,(p.y+.008)/projectedThickness);
+      float diskR=length(diskQ);
+      float diskMask=annulus(diskR,.36,1.43);
+      float diskTexture=filaments(diskR,atan(diskQ.y,diskQ.x),uTime+1.1);
+      float farSide=diskMask*smoothstep(-.025,.045,p.y);
+      addLayer(color,alpha,diskColor(diskR,p.x,diskTexture),farSide*(.32+.68*diskTexture));
+
+      // A Schwarzschild-like circular shadow, larger than the horizon scale.
+      float shadow=1.0-smoothstep(.279,.289,r);
+      color=mix(color,vec3(0.0),shadow);
+      alpha=max(alpha,shadow);
+
+      // Multiple photon-ring images become progressively thinner and fainter.
+      float photonMain=exp(-pow((r-.303)/.0042,2.0))*.78;
+      float photonSecond=exp(-pow((r-.314)/.0024,2.0))*.27;
+      float photonThird=exp(-pow((r-.321)/.0014,2.0))*.10;
+      float photon=photonMain+photonSecond+photonThird;
+      float photonBeam=mix(.48,1.35,smoothstep(.31,-.31,p.x));
+      vec3 photonColor=vec3(2.35,.72,.105)*photon*photonBeam;
+      addLayer(color,alpha,photonColor,clamp(photon*.68,0.0,.82));
+
+      float nearSide=diskMask*(1.0-smoothstep(-.025,.045,p.y));
+      addLayer(color,alpha,diskColor(diskR,p.x,diskTexture)*1.08,nearSide*(.38+.62*diskTexture));
+
+      // A faint optically thin halo keeps the edge from reading as a hard graphic cutout.
+      float halo=exp(-pow(max(r-.32,0.0)/.36,2.0))*(1.0-smoothstep(.34,1.28,r))*.055;
+      color+=vec3(.42,.025,.006)*halo;
+      alpha=max(alpha,halo);
+      if(alpha<.003)discard;
+      gl_FragColor=vec4(color,clamp(alpha,0.0,1.0));
+    }
+  `;
+  blackLensingMaterial=new THREE.ShaderMaterial({
+    transparent:true,depthTest:false,depthWrite:false,toneMapped:true,
+    uniforms:{uTime:{value:0},uElevation:{value:.2}},vertexShader,fragmentShader
+  });
+  blackLensingPlane=new THREE.Mesh(new THREE.PlaneGeometry(34,22),blackLensingMaterial);
+  blackLensingPlane.renderOrder=10;
+  root.add(blackLensingPlane);
 }
 
 function disposeGroup(group){
@@ -302,7 +416,7 @@ function modeCopy(next,id){
   if(next==='galaxy')return ['MILKY WAY / SCIENTIFIC RECONSTRUCTION','银河系 · 棒旋星系','拖动旋转，滚轮缩放；点击标记或搜索目标开始航行。'];
   if(next==='solar')return ['SOLAR SYSTEM / J2000 ORBIT MODEL','太阳系 · 八大行星','点击太阳或行星查看资料；点击地球进入地月系统。'];
   if(next==='earth')return ['EARTH–MOON SYSTEM / TEACHING SCALE','地月系 · 相互绕行','地月距离与天体大小采用不同可视化比例。'];
-  if(next==='blackhole')return ['GALACTIC CENTER / RELATIVISTIC VISUALIZATION','人马座 A* · 银河系中心','发光盘和光子环为科学可视化，不是直接照片。'];
+  if(next==='blackhole')return ['GALACTIC CENTER / RELATIVISTIC VISUALIZATION','人马座 A* · 银河系中心','阴影、光子环与被引力透镜弯曲的吸积盘为定性科学可视化，并非直接照片。'];
   const d=OBJECTS[id];return ['STELLAR SYSTEM / OBSERVATION MODEL',`${d.name} · ${d.en}`,'系外行星没有可靠表面影像，外观仅按物理属性示意。'];
 }
 
@@ -318,7 +432,7 @@ function cameraPreset(next){
   if(next==='galaxy')return {pos:new THREE.Vector3(0,78,60),target:new THREE.Vector3(),min:16,max:210};
   if(next==='solar')return {pos:new THREE.Vector3(0,98,122),target:new THREE.Vector3(),min:10,max:210};
   if(next==='earth')return {pos:new THREE.Vector3(0,10,32),target:new THREE.Vector3(),min:7,max:52};
-  if(next==='blackhole')return {pos:new THREE.Vector3(0,12,27),target:new THREE.Vector3(),min:7,max:75};
+  if(next==='blackhole')return {pos:new THREE.Vector3(0,6.5,31),target:new THREE.Vector3(),min:9,max:75};
   return {pos:new THREE.Vector3(0,14,34),target:new THREE.Vector3(),min:8,max:80};
 }
 
@@ -429,14 +543,20 @@ function animate(now){
   if(playing){
     if(mode==='galaxy'){galaxyYears+=delta*speed.years;const rotation=delta*speed.years/230e6*Math.PI*2;galaxyDisk.rotation.y+=rotation;galaxyBulge.rotation.y+=rotation*1.7;galaxyCore.material.rotation-=rotation*.15}
     else if(mode==='solar'||mode==='earth'||mode==='system'){simDays+=delta*speed.days;if(mode==='solar')updateSolar()}
-    else if(mode==='blackhole'){const s=speed.visual||1;blackDiskMaterial.uniforms.uTime.value+=delta*s;blackOrbitGroup.rotation.y+=delta*.08*s}
+    else if(mode==='blackhole'){const s=speed.visual||1;blackLensingMaterial.uniforms.uTime.value+=delta*s;blackOrbitGroup.rotation.y+=delta*.08*s}
   }
   if(mode==='solar'){
     for(const body of solarBodies.values())if(body.mesh){const hours=Math.max(4,Math.abs(body.data.rotation||24));body.mesh.rotation.y+=delta*(playing?1:0)*(12/hours);if(body.mesh.userData.clouds)body.mesh.userData.clouds.rotation.y+=delta*.018}
   }
   if(mode==='earth'&&roots.earth){const d=roots.earth.userData;const phase=simDays/27.321661*Math.PI*2;d.moonHolder.rotation.y=-phase;d.earth.rotation.y+=delta*.25*(playing?1:0);d.clouds.rotation.y+=delta*.035*(playing?1:0);d.moon.rotation.y+=delta*.03}
   if(mode==='system'&&playing)for(const a of genericAnimators){a.pivot.rotation.y=a.phase+simDays*a.speed*.003}
-  updateCameraTween(now);updateFollow();controls.update();updateMarkers();$('time-value').textContent=formatTime();renderer.render(scene,camera);
+  updateCameraTween(now);updateFollow();controls.update();
+  if(mode==='blackhole'&&blackLensingPlane){
+    blackLensingPlane.quaternion.copy(camera.quaternion);
+    cameraOffset.copy(camera.position).sub(controls.target);
+    blackLensingMaterial.uniforms.uElevation.value=Math.abs(cameraOffset.y)/Math.max(cameraOffset.length(),.0001);
+  }
+  updateMarkers();$('time-value').textContent=formatTime();renderer.render(scene,camera);
 }
 
 function onPointer(event){
