@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+  <meta name="theme-color" content="#02050b">
+  <meta name="description" content="可交互的银河系、太阳系与地月系科学可视化模型">
+  <title>银河系 · 物理实验室</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='5' fill='%23fff0b0'/%3E%3Cellipse cx='32' cy='32' rx='27' ry='10' fill='none' stroke='%2360ddff' stroke-width='2'/%3E%3Cellipse cx='32' cy='32' rx='25' ry='9' fill='none' stroke='%2360ddff' stroke-width='1' transform='rotate(60 32 32)'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <canvas id="universe" aria-label="银河系三维交互模型"></canvas>
+  <div class="space-noise" aria-hidden="true"></div>
+  <div class="vignette" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <a class="back" href="../../" aria-label="返回实验库">← <span>实验库</span></a>
+    <div class="title-lockup"><small>EXPERIMENT 002</small><h1>银河系</h1></div>
+    <div class="top-status"><i></i><span id="render-status">GALACTIC MODEL</span><b id="quality-label">AUTO</b></div>
+  </header>
+
+  <nav class="breadcrumb" id="breadcrumb" aria-label="当前位置">
+    <button data-nav="galaxy">银河系</button><i>›</i><span>总览</span>
+  </nav>
+
+  <section class="search-wrap" aria-label="天体搜索">
+    <div class="search-box"><i>⌕</i><input id="search-input" type="search" autocomplete="off" placeholder="搜索天体或恒星系统（按 /）"><kbd>/</kbd></div>
+    <div class="search-results" id="search-results" hidden></div>
+  </section>
+
+  <aside class="catalog-panel" id="catalog-panel">
+    <div class="panel-kicker"><span>目标导航</span><small>DESTINATIONS</small></div>
+    <div class="catalog-tabs" role="tablist">
+      <button class="active" data-catalog="featured">重点目标</button>
+      <button data-catalog="systems">恒星系统</button>
+    </div>
+    <div class="target-list" id="target-list"></div>
+    <p class="catalog-note">银河系内恒星系统彼此相距极远；标记大小采用教学比例。</p>
+  </aside>
+
+  <button class="mobile-catalog" id="mobile-catalog" aria-label="打开目标导航">⌕ <span>目标</span></button>
+
+  <aside class="info-panel" id="info-panel" aria-live="polite">
+    <button class="panel-close" id="panel-close" aria-label="收起资料卡">×</button>
+    <div class="object-type" id="object-type">BARRED SPIRAL GALAXY</div>
+    <div class="object-head"><div><h2 id="object-name">银河系</h2><p id="object-en">MILKY WAY</p></div><span id="object-index">MW</span></div>
+    <p class="object-summary" id="object-summary"></p>
+    <dl class="metrics" id="object-metrics"></dl>
+    <div class="facts" id="object-facts"></div>
+    <div class="scale-note" id="scale-note"></div>
+    <a class="source-link" id="source-link" href="#" target="_blank" rel="noreferrer">查看权威资料 ↗</a>
+  </aside>
+  <button class="info-reopen" id="info-reopen" hidden>i <span>资料</span></button>
+
+  <div class="marker-layer" id="marker-layer" aria-hidden="false">
+    <button class="space-marker major" id="marker-solar" data-target="solar-system"><i></i><span><b>太阳系</b><small>ORION SPUR</small></span></button>
+    <button class="space-marker danger" id="marker-sgr" data-target="sagittarius-a"><i></i><span><b>人马座 A*</b><small>GALACTIC CENTER</small></span></button>
+    <button class="space-marker major" id="marker-moon" data-target="moon"><i></i><span><b>月球</b><small>384,400 KM</small></span></button>
+  </div>
+
+  <div class="mode-caption">
+    <small id="mode-kicker">MILKY WAY / SCIENTIFIC RECONSTRUCTION</small>
+    <strong id="mode-title">银河系 · 棒旋星系</strong>
+    <p id="mode-description">拖动旋转，滚轮缩放；点击标记或搜索目标开始航行。</p>
+  </div>
+
+  <div class="system-strip" id="system-strip" hidden aria-label="太阳系天体顺序"></div>
+
+  <section class="transport" aria-label="模拟控制">
+    <button id="play-button" class="play" aria-label="播放或暂停"><span>Ⅱ</span><small>暂停</small></button>
+    <button id="speed-button"><b>100 万年/秒</b><small>时间倍率</small></button>
+    <button id="orbit-button" class="active"><i></i><small>轨道</small></button>
+    <button id="label-button" class="active"><i></i><small>标签</small></button>
+    <button id="quality-button"><b>AUTO</b><small>画质</small></button>
+    <button id="home-button"><span>◎</span><small>银河系</small></button>
+  </section>
+
+  <div class="time-readout"><small>模型时间</small><b id="time-value">J2000 + 0 年</b></div>
+  <div class="interaction-hint" id="interaction-hint">拖动旋转 · 滚轮缩放 · 点击天体</div>
+
+  <dialog id="model-dialog">
+    <button id="dialog-close" class="dialog-close" aria-label="关闭">×</button>
+    <small>MODEL NOTES</small><h2>模型与比例说明</h2>
+    <p>人类位于银河系内部，从未在银河系外拍摄过银河系全貌。银河系远景依据观测所得的棒旋结构、恒星盘、中央核球和猎户臂位置进行三维科学重建，不是照片。</p>
+    <p>银河系、恒星系统、太阳系和地月系的尺度相差巨大。本实验通过分层细节与平滑过渡保持可操作性；天体半径、轨道间距和目标标记均使用明确的教学可视化比例，资料卡中的数值为真实物理量。</p>
+    <p>行星位置从 J2000 近似轨道参数推进，适合课堂理解相对位置和周期，不用于航天器导航。系外行星通常没有可靠表面影像，因此只显示基于半径、温度和恒星类型的示意外观。</p>
+  </dialog>
+  <button class="model-info" id="model-info" aria-label="模型说明">?</button>
+
+  <div class="travel-screen" id="travel-screen" aria-hidden="true"><i></i><small>LOCKING TARGET</small><strong id="travel-title">太阳系</strong><p id="travel-distance">正在切换观测尺度</p></div>
+
+  <div class="loading" id="loading">
+    <div class="loading-galaxy"><i></i><i></i><i></i><b></b></div>
+    <p id="loading-title">正在建立银河坐标系</p>
+    <small id="loading-detail">GENERATING STELLAR POPULATION</small>
+    <div class="loading-bar"><i id="loading-progress"></i></div>
+    <div class="loading-error" id="loading-error" hidden><b>模型没有成功启动</b><p>请刷新页面后重试。</p></div>
+  </div>
+
+  <script>
+    window.__galaxyReady = false;
+    window.__showGalaxyError = function (detail) {
+      if (window.__galaxyReady) return;
+      var loading = document.getElementById('loading');
+      if (!loading) return;
+      loading.classList.add('failed');
+      document.getElementById('loading-title').textContent = '模型启动失败';
+      document.getElementById('loading-detail').textContent = detail || 'MODEL STARTUP ERROR';
+      document.getElementById('loading-error').hidden = false;
+    };
+    window.addEventListener('error', function (event) { window.__showGalaxyError(event.message); });
+    window.addEventListener('unhandledrejection', function () { window.__showGalaxyError('UNEXPECTED STARTUP ERROR'); });
+    window.setTimeout(function () { if (!window.__galaxyReady) window.__showGalaxyError('STARTUP TIMEOUT'); }, 15000);
+  </script>
+  <script defer src="./app.bundle.js"></script>
+</body>
+</html>

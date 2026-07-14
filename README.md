@@ -51,6 +51,16 @@ npm run build
 - Three.js 已打包进发布脚本，不依赖第三方 CDN；直接打开和 GitHub Pages 使用同一份三维代码。
 - 地球、云层和月球使用 NASA 真实影像；桌面端自动选择 4K，较弱设备自动降至 2K，也可以在实验面板手动切换。
 
+## 银河系实验
+
+`experiments/galaxy/` 提供银河系、银河中心人马座 A*、重点恒星系统、太阳系八大行星和地月系的分层探索。银河系远景采用科学重建而非外部照片；太阳系使用近似 J2000 轨道参数和开普勒求解器推进到当前日期。行星贴图、观测数据与程序化可视化的区别记录在 [`experiments/galaxy/SOURCES.md`](experiments/galaxy/SOURCES.md)。
+
+银河系实验的纹理作为独立文件按页面需要加载，不会内嵌进 `app.bundle.js`。修改 `experiments/galaxy/app.js` 或 `data.js` 后运行：
+
+```powershell
+npm run build:galaxy
+```
+
 物理关系参考：[NASA 日月食几何](https://science.nasa.gov/eclipses/geometry/)、[NASA 日月食与月球](https://science.nasa.gov/moon/eclipses/)、[NASA 月球轨道参数](https://eclipse.gsfc.nasa.gov/SEhelp/moonorbit.html)。
 
 纹理来源、处理方法和署名见 [`assets/textures/SOURCES.md`](assets/textures/SOURCES.md)。
