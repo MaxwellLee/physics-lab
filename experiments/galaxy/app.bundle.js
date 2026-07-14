@@ -3857,10 +3857,11 @@ void main() {
     float filaments(float radial,float angle,float phase){
       vec2 flow=vec2(cos(angle),sin(angle))*(radial*9.0)+vec2(radial*13.0,phase*.17);
       float n=noise21(flow)+.5*noise21(flow*2.07+13.4);
-      float fine=.5+.5*sin(radial*84.0-angle*6.0+phase*1.2+n*3.0);
-      float lanes=.5+.5*sin(radial*34.0+angle*2.4-phase*.48+n*2.0);
-      float knots=.62+.38*noise21(vec2(angle*5.5-phase*.22,radial*31.0));
-      return mix(.3,1.0,pow(fine,1.05))*mix(.68,1.0,lanes)*mix(.78,1.0,knots);
+      float fine=.5+.5*sin(radial*112.0-angle*6.0+phase*1.15+n*1.2);
+      float lanes=.5+.5*sin(radial*29.0+angle*2.0-phase*.38+n*.75);
+      vec2 angular=vec2(cos(angle),sin(angle));
+      float knots=.75+.25*noise21(angular*4.4+vec2(radial*24.0,-phase*.18));
+      return mix(.19,1.0,pow(fine,1.45))*mix(.78,1.0,lanes)*mix(.86,1.0,knots);
     }
     vec3 diskColor(float radial,float x,float textureValue){
       float heat=1.0-smoothstep(.34,1.38,radial);
@@ -3888,27 +3889,37 @@ void main() {
       vec3 color=vec3(0.0);
       float alpha=0.0;
 
-      // Far-side disk images, bent above and below the shadow by strong lensing.
-      vec2 upperQ=vec2(p.x,(p.y-.005)/.48);
-      float upperR=length(upperQ);
-      float upperMask=annulus(upperR,.35,1.38)*smoothstep(.015,.105,p.y)*(1.0-faceOn);
-      float upperTexture=filaments(upperR,atan(upperQ.y,upperQ.x),uTime);
-      addLayer(color,alpha,diskColor(upperR,p.x,upperTexture),upperMask*(.28+.72*upperTexture));
-
-      vec2 lowerQ=vec2(p.x,(p.y+.015)/.43);
-      float lowerR=length(lowerQ);
-      float lowerMask=annulus(lowerR,.34,1.22)*(1.0-smoothstep(-.10,.005,p.y))*(1.0-faceOn);
-      float lowerTexture=filaments(lowerR,-atan(lowerQ.y,lowerQ.x),uTime+2.7);
-      addLayer(color,alpha,diskColor(lowerR,p.x,lowerTexture)*.62,lowerMask*(.12+.48*lowerTexture));
-
-      // The direct thin disk. Its far half is occulted by the shadow; its near half crosses in front.
+      // Every visible image samples one source-disk flow field. The coordinates stretch
+      // continuously away from the mid-plane, so the direct disk becomes its lensed image
+      // instead of ending where a separately animated layer begins.
       float projectedThickness=mix(.115,1.0,faceOn);
       vec2 diskQ=vec2(p.x,(p.y+.008)/projectedThickness);
       float diskR=length(diskQ);
       float diskMask=annulus(diskR,.36,1.43);
-      float diskTexture=filaments(diskR,atan(diskQ.y,diskQ.x),uTime+1.1);
-      float farSide=diskMask*smoothstep(-.025,.045,p.y);
-      addLayer(color,alpha,diskColor(diskR,p.x,diskTexture),farSide*(.32+.68*diskTexture));
+      float diskTexture=filaments(diskR,atan(diskQ.y,diskQ.x),uTime);
+      float faceDiskOpacity=diskMask*faceOn*(.34+.66*diskTexture);
+      addLayer(color,alpha,diskColor(diskR,p.x,diskTexture)*1.08,faceDiskOpacity);
+
+      float farWarp=(1.0-faceOn)*smoothstep(-.015,.48,p.y);
+      float farScale=mix(projectedThickness,.48,farWarp);
+      vec2 farQ=vec2(p.x,(p.y+.008)/farScale);
+      float farR=length(farQ);
+      float farTexture=filaments(farR,atan(farQ.y,farQ.x),uTime);
+      float farVisibility=smoothstep(-.055,.055,p.y);
+      float farMask=annulus(farR,.35,1.43)*farVisibility*(1.0-faceOn);
+      addLayer(color,alpha,diskColor(farR,p.x,farTexture)*1.08,farMask*(.34+.66*farTexture));
+
+      // The fainter underside image grows out of the near-side flow after the foreground
+      // strip has already begun to curve away, preserving the same lanes through the join.
+      float lowerWarp=(1.0-faceOn)*smoothstep(.015,.44,-p.y);
+      float lowerScale=mix(projectedThickness,.43,lowerWarp);
+      vec2 lowerQ=vec2(p.x,(p.y+.008)/lowerScale);
+      float lowerR=length(lowerQ);
+      float lowerTexture=filaments(lowerR,atan(lowerQ.y,lowerQ.x),uTime);
+      float lowerEmergence=(1.0-faceOn)*smoothstep(.045,.19,-p.y);
+      float lowerMask=annulus(lowerR,.35,1.3)*(1.0-farVisibility)*lowerEmergence;
+      float lowerEnergy=mix(1.0,.62,lowerWarp);
+      addLayer(color,alpha,diskColor(lowerR,p.x,lowerTexture)*lowerEnergy,lowerMask*(.24+.58*lowerTexture));
 
       // A Schwarzschild-like circular shadow, larger than the horizon scale.
       float shadow=1.0-smoothstep(.279,.289,r);
@@ -3924,8 +3935,11 @@ void main() {
       vec3 photonColor=vec3(2.35,.72,.105)*photon*photonBeam;
       addLayer(color,alpha,photonColor,clamp(photon*.68,0.0,.82));
 
-      float nearSide=diskMask*(1.0-smoothstep(-.025,.045,p.y));
-      addLayer(color,alpha,diskColor(diskR,p.x,diskTexture)*1.08,nearSide*(.38+.62*diskTexture));
+      // Only the physically foreground portion is restored over the shadow. It uses the
+      // exact same phase and source coordinates as both lensed images above.
+      float edgeNear=1.0-smoothstep(-.025,.045,p.y);
+      float nearSide=diskMask*edgeNear*(1.0-faceOn);
+      addLayer(color,alpha,diskColor(diskR,p.x,diskTexture)*.98,nearSide*(.32+.58*diskTexture));
 
       // A faint optically thin halo keeps the edge from reading as a hard graphic cutout.
       float halo=exp(-pow(max(r-.32,0.0)/.36,2.0))*(1.0-smoothstep(.34,1.28,r))*.055;
