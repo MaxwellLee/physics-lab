@@ -39,7 +39,7 @@ let previousFollow = new THREE.Vector3();
 let cameraTween = null;
 let genericAnimators = [];
 let genericOrbitGroup = null;
-let genericLabels = [];
+let sceneLabels = [];
 let interactiveObjects = [];
 let textureProgress = 0;
 const clock = new THREE.Clock();
@@ -61,17 +61,23 @@ const SPEEDS = {
   solar: [
     {label:'1 日/秒', days:1},
     {label:'30 日/秒', days:30},
-    {label:'1 年/秒', days:365.256}
+    {label:'1 年/秒', days:365.256},
+    {label:'5 年/秒', days:1826.28},
+    {label:'10 年/秒', days:3652.56}
   ],
   earth: [
     {label:'6 小时/秒', days:.25},
     {label:'1 日/秒', days:1},
-    {label:'7 日/秒', days:7}
+    {label:'7 日/秒', days:7},
+    {label:'5 年/秒', days:1826.28},
+    {label:'10 年/秒', days:3652.56}
   ],
   system: [
     {label:'1 日/秒', days:1},
     {label:'30 日/秒', days:30},
-    {label:'1 年/秒', days:365.256}
+    {label:'1 年/秒', days:365.256},
+    {label:'5 年/秒', days:1826.28},
+    {label:'10 年/秒', days:3652.56}
   ],
   blackhole: [
     {label:'教学速度', visual:1},
@@ -194,6 +200,13 @@ function solvePosition(p,days,out=new THREE.Vector3()){
   const inc=THREE.MathUtils.degToRad(p.i);out.set(x,z*Math.sin(inc),z*Math.cos(inc));return out;
 }
 
+function solveHeliocentricPosition(p,days,out=new THREE.Vector3()){
+  let M=THREE.MathUtils.degToRad(p.m0)+Math.PI*2*days/p.period;M%=Math.PI*2;
+  let E=M;for(let i=0;i<6;i++)E=M+p.e*Math.sin(E);
+  const x=(Math.cos(E)-p.e)*p.a;const z=Math.sqrt(1-p.e*p.e)*Math.sin(E)*p.a;const inc=THREE.MathUtils.degToRad(p.i);
+  out.set(x,z*Math.sin(inc),z*Math.cos(inc));return out;
+}
+
 function orbitLine(p,color=0x315363){
   const pts=[];for(let i=0;i<180;i++){const E=i/180*Math.PI*2;const a=orbitRadius(p.a);const x=(Math.cos(E)-p.e)*a;const z=Math.sqrt(1-p.e*p.e)*Math.sin(E)*a;const inc=THREE.MathUtils.degToRad(p.i);pts.push(new THREE.Vector3(x,z*Math.sin(inc),z*Math.cos(inc)))}
   const g=new THREE.BufferGeometry().setFromPoints(pts);return new THREE.LineLoop(g,new THREE.LineBasicMaterial({color,transparent:true,opacity:.32,depthWrite:false}));
@@ -212,7 +225,7 @@ function addUranusRings(mesh,scale){
 async function createSolarSystem(){
   const root=new THREE.Group();root.visible=false;roots.solar=root;scene.add(root);
   root.add(new THREE.AmbientLight(0x43505b,.2));
-  const sunMat=new THREE.MeshBasicMaterial({color:0xffb64b});const sun=new THREE.Mesh(new THREE.SphereGeometry(4.2,48,32),sunMat);sun.userData={id:'sun',kind:'body'};root.add(sun);interactiveObjects.push(sun);solarBodies.set('sun',{mesh:sun,data:OBJECTS.sun});
+  const sunMat=new THREE.MeshBasicMaterial({color:0xffb64b});const sun=new THREE.Mesh(new THREE.SphereGeometry(4.2,48,32),sunMat);sun.userData={id:'sun',kind:'body'};root.add(sun);interactiveObjects.push(sun);solarBodies.set('sun',{mesh:sun,data:OBJECTS.sun});addSceneLabel(sun,'太阳','SUN · 太阳系中心','solar',-30);
   const sunGlow=sprite(makeGlowTexture('#fff8d8','#ff9b38','rgba(255,92,20,0)'),18,.8);sun.add(sunGlow);
   const light=new THREE.PointLight(0xfff0d2,450,260,1.1);root.add(light);
   for(let index=0;index<PLANETS.length;index++){
@@ -220,7 +233,7 @@ async function createSolarSystem(){
     if(p.texture){try{map=await loadTexture(p.texture)}catch(error){console.warn(`Texture failed: ${p.id}`,error)}}else map=makeUranusTexture();
     const material=new THREE.MeshStandardMaterial({map,color:map?0xffffff:p.color,roughness:.83,metalness:0});
     const holder=new THREE.Group();holder.rotation.z=THREE.MathUtils.degToRad(p.tilt);root.add(holder);
-    const mesh=new THREE.Mesh(new THREE.SphereGeometry(p.visual,40,24),material);mesh.userData={id:p.id,kind:'body'};holder.add(mesh);interactiveObjects.push(mesh);
+    const mesh=new THREE.Mesh(new THREE.SphereGeometry(p.visual,40,24),material);mesh.userData={id:p.id,kind:'body'};holder.add(mesh);interactiveObjects.push(mesh);addSceneLabel(mesh,p.name,p.en,'solar',(index%3-1)*10);
     if(p.id==='earth'){
       try{const clouds=await loadTexture('../../assets/textures/clouds_2048.png');const cloudMesh=new THREE.Mesh(new THREE.SphereGeometry(p.visual*1.012,40,24),new THREE.MeshStandardMaterial({map:clouds,transparent:true,opacity:.55,depthWrite:false,roughness:1}));mesh.add(cloudMesh);mesh.userData.clouds=cloudMesh}catch{}
     }
@@ -237,13 +250,17 @@ async function createEarthSystem(){
   const root=new THREE.Group();root.visible=false;roots.earth=root;scene.add(root);
   root.add(new THREE.AmbientLight(0x6a87a5,.32));const key=new THREE.DirectionalLight(0xfff1d2,3.4);key.position.set(-15,8,12);root.add(key);
   let earthMap,moonMap,cloudMap;try{[earthMap,moonMap,cloudMap]=await Promise.all([loadTexture('../../assets/textures/earth_4096.jpg'),loadTexture('../../assets/textures/moon_4096.jpg'),loadTexture('../../assets/textures/clouds_2048.png')])}catch{[earthMap,moonMap,cloudMap]=await Promise.all([loadTexture('../../assets/textures/earth_2048.jpg'),loadTexture('../../assets/textures/moon_2048.jpg'),loadTexture('../../assets/textures/clouds_2048.png')])}
-  const earth=new THREE.Mesh(new THREE.SphereGeometry(4.2,64,40),new THREE.MeshStandardMaterial({map:earthMap,roughness:.78}));earth.rotation.z=THREE.MathUtils.degToRad(23.44);earth.userData={id:'earth',kind:'body'};root.add(earth);interactiveObjects.push(earth);
+  const earth=new THREE.Mesh(new THREE.SphereGeometry(4.2,64,40),new THREE.MeshStandardMaterial({map:earthMap,roughness:.78}));earth.rotation.z=THREE.MathUtils.degToRad(23.44);earth.userData={id:'earth',kind:'body'};root.add(earth);interactiveObjects.push(earth);addSceneLabel(earth,'地球','EARTH · 地月系中心','earth',-58);
   const clouds=new THREE.Mesh(new THREE.SphereGeometry(4.25,64,40),new THREE.MeshStandardMaterial({map:cloudMap,transparent:true,opacity:.64,depthWrite:false,roughness:1}));earth.add(clouds);
   const atmosphere=new THREE.Mesh(new THREE.SphereGeometry(4.34,48,32),new THREE.MeshBasicMaterial({color:0x55b9ff,transparent:true,opacity:.085,side:THREE.BackSide,depthWrite:false}));earth.add(atmosphere);
   const moonPlane=new THREE.Group();moonPlane.rotation.x=THREE.MathUtils.degToRad(5.1);root.add(moonPlane);
   const moonHolder=new THREE.Group();moonPlane.add(moonHolder);const moon=new THREE.Mesh(new THREE.SphereGeometry(1.14,48,30),new THREE.MeshStandardMaterial({map:moonMap,roughness:.95}));moon.position.x=13;moon.userData={id:'moon',kind:'body'};moonHolder.add(moon);interactiveObjects.push(moon);
   const moonOrbit=new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(Array.from({length:160},(_,i)=>new THREE.Vector3(Math.cos(i/160*Math.PI*2)*13,0,Math.sin(i/160*Math.PI*2)*13))),new THREE.LineBasicMaterial({color:0x5a8294,transparent:true,opacity:.4}));moonPlane.add(moonOrbit);
-  root.userData={earth,clouds,moonPlane,moonHolder,moon,moonOrbit};
+  const contextGroup=new THREE.Group();root.add(contextGroup);const contextBodies=new Map();
+  for(const id of ['sun',...PLANETS.filter(p=>p.id!=='earth').map(p=>p.id)]){
+    const source=solarBodies.get(id);if(!source?.mesh)continue;const object=source.mesh.clone(true);const p=PLANETS.find(item=>item.id===id);const base=id==='sun'?4.2:p.visual;const contextSize=id==='sun'?1.05:.22+Math.sqrt(p.radius/69911)*.35;object.scale.setScalar(contextSize/base);object.userData={id,kind:'body'};contextGroup.add(object);interactiveObjects.push(object);contextBodies.set(id,{object,data:p});addSceneLabel(object,OBJECTS[id].name,`${OBJECTS[id].en} · 远景方向`,'earth',(contextBodies.size%3-1)*11);
+  }
+  root.userData={earth,clouds,moonPlane,moonHolder,moon,moonOrbit,contextGroup,contextBodies};updateEarthContext();
 }
 
 let blackLensingMaterial,blackLensingPlane,blackOrbitGroup;
@@ -254,7 +271,7 @@ function createBlackHole(){
 
   // The visible dark region is the lensing shadow, not the event horizon itself.
   // This smaller sphere preserves a ray-cast target and represents the horizon scale.
-  const hole=new THREE.Mesh(new THREE.SphereGeometry(1.22,48,30),new THREE.MeshBasicMaterial({color:0x000000}));hole.userData={id:'sagittarius-a',kind:'body'};root.add(hole);interactiveObjects.push(hole);
+  const hole=new THREE.Mesh(new THREE.SphereGeometry(1.22,48,30),new THREE.MeshBasicMaterial({color:0x000000}));hole.userData={id:'sagittarius-a',kind:'body'};root.add(hole);interactiveObjects.push(hole);addSceneLabel(hole,'人马座 A*','GALACTIC CENTER · 黑洞阴影','blackhole',-145);
 
   const vertexShader=`
     varying vec2 vUv;
@@ -354,14 +371,15 @@ function createBlackHole(){
       color=mix(color,vec3(0.0),shadow);
       alpha=max(alpha,shadow);
 
-      // Multiple photon-ring images become progressively thinner and fainter.
-      float photonMain=exp(-pow((r-.303)/.0042,2.0))*.78;
-      float photonSecond=exp(-pow((r-.314)/.0024,2.0))*.27;
-      float photonThird=exp(-pow((r-.321)/.0014,2.0))*.10;
-      float photon=photonMain+photonSecond+photonThird;
+      // Photon-ring images remain physically present but avoid a diagram-like perfect outline.
+      float photonMain=exp(-pow((r-.303)/.0048,2.0))*.22;
+      float photonSecond=exp(-pow((r-.314)/.0028,2.0))*.07;
+      float photonThird=exp(-pow((r-.321)/.0018,2.0))*.025;
+      float photonVariation=.62+.38*noise21(vec2(angle*2.4+6.0,uTime*.035));
+      float photon=(photonMain+photonSecond+photonThird)*photonVariation;
       float photonBeam=mix(.48,1.35,smoothstep(.31,-.31,p.x));
-      vec3 photonColor=vec3(2.35,.72,.105)*photon*photonBeam;
-      addLayer(color,alpha,photonColor,clamp(photon*.68,0.0,.82));
+      vec3 photonColor=vec3(2.05,.56,.075)*photon*photonBeam;
+      addLayer(color,alpha,photonColor,clamp(photon*.38,0.0,.32));
 
       // Only the physically foreground portion is restored over the shadow. It uses the
       // exact same phase and source coordinates as both lensed images above.
@@ -396,12 +414,15 @@ function starMesh(radius,color){
 }
 
 function clearSystemLabels(){
-  genericLabels=[];$('system-label-layer').replaceChildren();
+  for(const label of sceneLabels.filter(label=>label.modeKey==='system'))label.el.remove();
+  sceneLabels=sceneLabels.filter(label=>label.modeKey!=='system');
 }
 
-function addSystemLabel(object,title,detail='',offsetY=0){
-  const el=document.createElement('div');el.className='system-body-label';el.innerHTML=`<b>${title}</b>${detail?`<small>${detail}</small>`:''}`;$('system-label-layer').append(el);genericLabels.push({object,el,offsetY});
+function addSceneLabel(object,title,detail='',modeKey='system',offsetY=0){
+  const el=document.createElement('div');el.className='system-body-label';el.dataset.mode=modeKey;el.innerHTML=`<b>${title}</b>${detail?`<small>${detail}</small>`:''}`;$('system-label-layer').append(el);sceneLabels.push({object,el,modeKey,offsetY});
 }
+
+function addSystemLabel(object,title,detail='',offsetY=0){addSceneLabel(object,title,detail,'system',offsetY)}
 
 function systemOrbitLine(distance,color=0x436774,opacity=.34){
   const points=Array.from({length:160},(_,n)=>new THREE.Vector3(Math.cos(n/160*Math.PI*2)*distance,0,Math.sin(n/160*Math.PI*2)*distance));
@@ -445,6 +466,14 @@ function updateSolar(){
   for(const p of PLANETS){const body=solarBodies.get(p.id);if(!body)continue;solvePosition(p,simDays,body.position);body.holder.position.copy(body.position)}
 }
 
+function updateEarthContext(){
+  const contextBodies=roots.earth?.userData.contextBodies;if(!contextBodies)return;const earthData=PLANETS.find(p=>p.id==='earth');const earthPosition=solveHeliocentricPosition(earthData,simDays);const position=new THREE.Vector3();
+  for(const [id,{object,data}] of contextBodies){
+    if(id==='sun')position.copy(earthPosition).multiplyScalar(-1);else solveHeliocentricPosition(data,simDays,position).sub(earthPosition);
+    if(position.lengthSq()<.000001)position.set(1,0,0);object.position.copy(position.normalize().multiplyScalar(id==='sun'?82:70));
+  }
+}
+
 function setRootVisibility(next){
   for(const [key,root] of Object.entries(roots))root.visible=key===next;
 }
@@ -452,7 +481,7 @@ function setRootVisibility(next){
 function modeCopy(next,id){
   if(next==='galaxy')return ['MILKY WAY / SCIENTIFIC RECONSTRUCTION','银河系 · 棒旋星系','拖动旋转，滚轮缩放；点击标记或搜索目标开始航行。'];
   if(next==='solar')return ['SOLAR SYSTEM / J2000 ORBIT MODEL','太阳系 · 八大行星','点击太阳或行星查看资料；点击地球进入地月系统。'];
-  if(next==='earth')return ['EARTH–MOON SYSTEM / TEACHING SCALE','地月系 · 相互绕行','地月距离与天体大小采用不同可视化比例。'];
+  if(next==='earth')return ['EARTH–MOON SYSTEM / TEACHING SCALE','地月系 · 相互绕行','远景天体按地球视角方向排列，视直径为便于辨认而增强。'];
   if(next==='blackhole')return ['GALACTIC CENTER / RELATIVISTIC VISUALIZATION','人马座 A* · 银河系中心','阴影、光子环与被引力透镜弯曲的吸积盘为定性科学可视化，并非直接照片。'];
   const d=OBJECTS[id];return ['STELLAR SYSTEM / OBSERVATION MODEL',`${d.name} · ${d.en}`,'系外行星没有可靠表面影像，外观仅按物理属性示意。'];
 }
@@ -610,8 +639,8 @@ function updateMarkers(){
 }
 
 function updateSystemLabels(){
-  if(mode!=='system')return;
-  for(const {object,el,offsetY} of genericLabels){
+  for(const {object,el,modeKey,offsetY} of sceneLabels){
+    if(modeKey!==mode||!object.parent){el.style.opacity='0';continue}
     const p=new THREE.Vector3();object.getWorldPosition(p);const v=p.project(camera);const visible=v.z>-1&&v.z<1&&Math.abs(v.x)<1.04&&Math.abs(v.y)<1.04;el.style.opacity=visible?'1':'0';el.style.transform=`translate(${(v.x*.5+.5)*innerWidth}px,${(-v.y*.5+.5)*innerHeight+(offsetY||0)}px)`;
   }
 }
@@ -630,7 +659,7 @@ function animate(now){
   if(mode==='solar'){
     for(const body of solarBodies.values())if(body.mesh){const hours=Math.max(4,Math.abs(body.data.rotation||24));body.mesh.rotation.y+=delta*(playing?1:0)*(12/hours);if(body.mesh.userData.clouds)body.mesh.userData.clouds.rotation.y+=delta*.018}
   }
-  if(mode==='earth'&&roots.earth){const d=roots.earth.userData;const phase=simDays/27.321661*Math.PI*2;d.moonHolder.rotation.y=-phase;d.earth.rotation.y+=delta*.25*(playing?1:0);d.clouds.rotation.y+=delta*.035*(playing?1:0);d.moon.rotation.y+=delta*.03}
+  if(mode==='earth'&&roots.earth){const d=roots.earth.userData;const phase=simDays/27.321661*Math.PI*2;d.moonHolder.rotation.y=-phase;d.earth.rotation.y+=delta*.25*(playing?1:0);d.clouds.rotation.y+=delta*.035*(playing?1:0);d.moon.rotation.y+=delta*.03;updateEarthContext();if(playing)for(const {object} of d.contextBodies.values())object.rotation.y+=delta*.025}
   if(mode==='system'&&playing)for(const a of genericAnimators){a.pivot.rotation.y=a.phase+simDays*a.speed*.003}
   updateCameraTween(now);updateFollow();controls.update();
   if(mode==='blackhole'&&blackLensingPlane){

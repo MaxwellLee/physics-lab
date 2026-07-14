@@ -32,6 +32,7 @@ Planet positions are advanced from approximate J2000 orbital elements with a Kep
 - Saturn's rings are a procedural teaching texture. Their relative extent is approximate; individual ring particles are not resolved.
 - Uranus's rings and all generic exoplanet appearances are schematic.
 - Nearby stellar systems use compressed teaching geometry: Alpha Centauri shows the A/B binary plus confirmed Proxima b and d; TRAPPIST-1 shows the seven known planets and a broad habitable-zone guide; Sirius and Polaris show stellar companions; Betelgeuse and Vega show observed circumstellar structure rather than invented planets.
+- The Earth–Moon view places the Sun and other planets on a distant context sphere using approximate heliocentric directions from the same orbital model. Their apparent diameters are deliberately enlarged so they remain identifiable while the user rotates the view; this is a directional sky context, not a claim that planetary disks would look that large to the unaided eye.
 
 ## Usage
 
