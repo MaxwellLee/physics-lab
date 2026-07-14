@@ -27,6 +27,7 @@ const lowMemory = navigator.deviceMemory && navigator.deviceMemory <= 4;
 let quality = 'auto';
 let mode = 'galaxy';
 let selectedId = 'galaxy';
+let infoPanelCollapsed = isMobile;
 let playing = true;
 let showOrbits = true;
 let simDays = (Date.now() - Date.UTC(2000,0,1,12)) / 86400000;
@@ -438,7 +439,8 @@ function updateModeUI(next,id){
   document.body.className=`mode-${next}${document.body.classList.contains('no-labels')?' no-labels':''}`;
   const copy=modeCopy(next,id);$('mode-kicker').textContent=copy[0];$('mode-title').textContent=copy[1];$('mode-description').textContent=copy[2];
   $('render-status').textContent=next==='galaxy'?'GALACTIC MODEL':next==='solar'?'ORBITAL MODEL':next==='earth'?'EARTH–MOON MODEL':next==='blackhole'?'GALACTIC CENTER':'STELLAR MODEL';
-  $('system-strip').hidden=next!=='solar';
+  $('system-strip').hidden=next!=='solar'&&next!=='earth';
+  updateSystemStrip();
   speedIndex=0;updateSpeedLabel();updateBreadcrumb(next,id);
 }
 
@@ -455,7 +457,10 @@ function animateCamera(pos,target,duration=900){
 }
 
 function setMode(next,id,instant=false){
-  if(next===mode && next!=='system'&&!instant){showInfo(id);if(next==='solar')focusSolarBody(id);return}
+  if(next===mode && next!=='system'&&!instant){
+    if(next==='solar'&&id==='solar-system'){focusSolarOverview();return}
+    showInfo(id);if(next==='solar')focusSolarBody(id);return
+  }
   followObject=null;cameraTween=null;
   const finish=()=>{
     mode=next;selectedId=id;setRootVisibility(next);if(next==='system')buildGenericSystem(id);if(next==='solar')updateSolar();
@@ -480,10 +485,21 @@ function navigateTo(id,instant=false){
   }
 }
 
+function focusSolarOverview(){
+  const preset=cameraPreset('solar');
+  selectedId='solar-system';followObject=null;previousFollow.set(0,0,0);
+  controls.minDistance=preset.min;controls.maxDistance=preset.max;
+  animateCamera(preset.pos,preset.target,900);showInfo('solar-system');updateSystemStrip();updateBreadcrumb('solar','solar-system');
+}
+
 function focusSolarBody(id){
   const body=solarBodies.get(id);if(!body)return;selectedId=id;showInfo(id);updateSystemStrip();
   const world=new THREE.Vector3();body.mesh.getWorldPosition(world);const size=id==='sun'?4.2:body.data.visual;
-  const direction=new THREE.Vector3(.85,.45,1).normalize();const pos=world.clone().addScaledVector(direction,Math.max(8,size*5.2));
+  const direction=new THREE.Vector3(.85,.45,1).normalize();
+  const earthVisual=PLANETS.find(p=>p.id==='earth').visual;
+  const distance=id==='sun'?size*5.2:size*(8.7/earthVisual);
+  controls.minDistance=id==='sun'?5:Math.max(.8,size*2.35);controls.maxDistance=cameraPreset('solar').max;
+  const pos=world.clone().addScaledVector(direction,distance);
   animateCamera(pos,world,800);followObject=body.mesh;previousFollow.copy(world);
 }
 
@@ -497,7 +513,7 @@ function showInfo(id){
   $('object-metrics').innerHTML=d.metrics.map(([k,v])=>`<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
   $('object-facts').innerHTML=d.facts.map(v=>`<div class="fact"><i></i><span>${v}</span></div>`).join('');
   $('scale-note').textContent=d.note||'模型采用教学可视化比例。';$('source-link').href=d.source;$('source-link').textContent=`${d.sourceLabel||'权威资料'} ↗`;
-  $('info-panel').classList.remove('collapsed');$('info-reopen').hidden=true;
+  $('info-panel').classList.toggle('collapsed',infoPanelCollapsed);$('info-reopen').hidden=!infoPanelCollapsed;
   try{history.replaceState(null,'',`#${id}`)}catch{}
   updateCatalog();
 }
@@ -519,7 +535,8 @@ function renderCatalog(kind='featured'){
 function updateCatalog(){const active=document.querySelector('.catalog-tabs button.active');renderCatalog(active?.dataset.catalog||'featured')}
 
 function updateSystemStrip(){
-  const ids=['sun',...PLANETS.map(p=>p.id)];$('system-strip').innerHTML=ids.map(id=>`<button data-target="${id}" class="${selectedId===id?'active':''}">${OBJECTS[id].name}</button>`).join('');
+  const ids=['solar-system','sun',...PLANETS.map(p=>p.id)];const activeId=mode==='earth'?'earth':selectedId;
+  $('system-strip').innerHTML=ids.map(id=>`<button data-target="${id}" class="${activeId===id?'active':''}">${id==='solar-system'?'总览':OBJECTS[id].name}</button>`).join('');
 }
 
 function search(query){
@@ -593,8 +610,8 @@ $('orbit-button').addEventListener('click',()=>{showOrbits=!showOrbits;$('orbit-
 $('label-button').addEventListener('click',()=>{document.body.classList.toggle('no-labels');$('label-button').classList.toggle('active',!document.body.classList.contains('no-labels'))});
 $('quality-button').addEventListener('click',()=>{quality=quality==='auto'?'high':quality==='high'?'low':'auto';applyQuality()});
 $('home-button').addEventListener('click',()=>navigateTo('galaxy'));
-$('panel-close').addEventListener('click',()=>{$('info-panel').classList.add('collapsed');$('info-reopen').hidden=false});
-$('info-reopen').addEventListener('click',()=>{$('info-panel').classList.remove('collapsed');$('info-reopen').hidden=true});
+$('panel-close').addEventListener('click',()=>{infoPanelCollapsed=true;$('info-panel').classList.add('collapsed');$('info-reopen').hidden=false});
+$('info-reopen').addEventListener('click',()=>{infoPanelCollapsed=false;$('info-panel').classList.remove('collapsed');$('info-reopen').hidden=true});
 $('mobile-catalog').addEventListener('click',()=>$('catalog-panel').classList.toggle('open'));
 $('model-info').addEventListener('click',()=>$('model-dialog').showModal());$('dialog-close').addEventListener('click',()=>$('model-dialog').close());
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();applyQuality()});
@@ -605,7 +622,6 @@ async function init(){
   await createSolarSystem();updateLoading(82,'正在建立地月系统','LOADING EARTH–MOON SYSTEM');await createEarthSystem();
   createBlackHole();updateLoading(94,'正在校准相机','CALIBRATING OBSERVATION SCALES');
   updateSolar();updateSystemStrip();renderCatalog();setMode('galaxy','galaxy',true);showInfo('galaxy');
-  if(isMobile){$('info-panel').classList.add('collapsed');$('info-reopen').hidden=false}
   updateLoading(100,'银河坐标系已就绪','MODEL READY');
   setTimeout(()=>{$('loading').classList.add('done');window.__galaxyReady=true},450);
   const initial=location.hash.slice(1);if(initial&&OBJECTS[initial]&&initial!=='galaxy')setTimeout(()=>navigateTo(initial),900);
