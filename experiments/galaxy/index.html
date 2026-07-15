@@ -7,7 +7,7 @@
   <meta name="description" content="可交互的银河系、太阳系与地月系科学可视化模型">
   <title>银河系 · 物理实验室</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='5' fill='%23fff0b0'/%3E%3Cellipse cx='32' cy='32' rx='27' ry='10' fill='none' stroke='%2360ddff' stroke-width='2'/%3E%3Cellipse cx='32' cy='32' rx='25' ry='9' fill='none' stroke='%2360ddff' stroke-width='1' transform='rotate(60 32 32)'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./style.css?v=20260715-audio2">
 </head>
 <body>
   <canvas id="universe" aria-label="银河系三维交互模型"></canvas>
@@ -18,14 +18,15 @@
     <a class="back" href="../../" aria-label="返回实验库">← <span>实验库</span></a>
     <div class="title-lockup"><small>EXPERIMENT 002</small><h1>银河系</h1></div>
     <div class="top-actions">
-      <button class="audio-toggle active" id="audio-toggle" type="button" aria-pressed="true" aria-label="关闭背景音乐" title="背景音乐将在首次互动后播放">
-        <span aria-hidden="true">♫</span><b>声音</b><small id="audio-state">待播放</small>
+      <button class="audio-toggle active" id="audio-toggle" type="button" aria-pressed="true" aria-label="播放背景音乐" title="点击播放背景音乐">
+        <span class="audio-visualizer" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="audio-copy"><b>宇宙声景</b><small id="audio-state">点击开启</small></span>
       </button>
       <div class="top-status"><i></i><span id="render-status">GALACTIC MODEL</span><b id="quality-label">AUTO</b></div>
     </div>
   </header>
 
-  <audio id="background-music" loop preload="metadata" src="./audio/decoherence.mp3"></audio>
+  <audio id="background-music" loop preload="metadata" src="./audio/decoherence.mp3?v=20260715"></audio>
 
   <nav class="breadcrumb" id="breadcrumb" aria-label="当前位置">
     <button data-nav="galaxy">银河系</button><i>›</i><span>总览</span>
@@ -137,6 +138,6 @@
     window.addEventListener('unhandledrejection', function () { window.__showGalaxyError('UNEXPECTED STARTUP ERROR'); });
     window.setTimeout(function () { if (!window.__galaxyReady) window.__showGalaxyError('STARTUP TIMEOUT'); }, 15000);
   </script>
-  <script defer src="./app.bundle.js"></script>
+  <script defer src="./app.bundle.js?v=20260715-audio2"></script>
 </body>
 </html>

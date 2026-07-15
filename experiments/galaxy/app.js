@@ -45,12 +45,13 @@ const backgroundMusic = $('background-music');
 const audioToggle = $('audio-toggle');
 let soundEnabled = true;
 let musicStarted = false;
+let musicStarting = false;
 let musicFadeFrame = 0;
 try { soundEnabled = localStorage.getItem('galaxy-background-music') !== 'off' } catch {}
 backgroundMusic.volume = 0;
 
 function updateAudioUI(state=soundEnabled?(musicStarted?'playing':'pending'):'muted'){
-  const enabled=state!=='muted';audioToggle.classList.toggle('active',enabled);audioToggle.classList.toggle('playing',state==='playing');audioToggle.classList.toggle('failed',state==='failed');audioToggle.setAttribute('aria-pressed',String(enabled));audioToggle.setAttribute('aria-label',enabled?'关闭背景音乐':'开启背景音乐');audioToggle.title=state==='playing'?'关闭背景音乐':state==='failed'?'音乐载入失败，点击重试':enabled?'首次点击页面后播放':'开启背景音乐';audioToggle.querySelector('span').textContent=enabled?'♫':'×';$('audio-state').textContent=state==='playing'?'播放中':state==='failed'?'载入失败':enabled?'待播放':'已静音';
+  const enabled=state!=='muted';audioToggle.classList.toggle('active',enabled);audioToggle.classList.toggle('playing',state==='playing');audioToggle.classList.toggle('failed',state==='failed');audioToggle.classList.toggle('buffering',state==='buffering');audioToggle.setAttribute('aria-pressed',String(enabled));audioToggle.setAttribute('aria-label',state==='playing'?'关闭背景音乐':'播放背景音乐');audioToggle.title=state==='playing'?'关闭背景音乐':state==='failed'?'音乐载入失败，点击重试':state==='buffering'?'正在载入背景音乐':enabled?'点击播放；选择目标或拖动星空也会启动':'开启背景音乐';$('audio-state').textContent=state==='playing'?'播放中':state==='failed'?'载入失败':state==='buffering'?'缓冲中':enabled?'点击开启':'已静音';
 }
 
 function fadeBackgroundMusic(target,duration=900,onDone){
@@ -60,8 +61,8 @@ function fadeBackgroundMusic(target,duration=900,onDone){
 }
 
 async function startBackgroundMusic(){
-  if(!soundEnabled)return false;
-  try{await backgroundMusic.play();musicStarted=true;fadeBackgroundMusic(.18,1500);updateAudioUI('playing');return true}catch(error){console.warn('Background music was blocked or unavailable',error);updateAudioUI(backgroundMusic.error?'failed':'pending');return false}
+  if(!soundEnabled||musicStarting)return false;musicStarting=true;updateAudioUI('buffering');
+  try{await backgroundMusic.play();musicStarted=true;fadeBackgroundMusic(.18,1500);updateAudioUI('playing');return true}catch(error){console.warn('Background music was blocked or unavailable',error);updateAudioUI(backgroundMusic.error?'failed':'pending');return false}finally{musicStarting=false}
 }
 
 function setBackgroundMusic(enabled){
@@ -70,8 +71,10 @@ function setBackgroundMusic(enabled){
 }
 
 async function unlockBackgroundMusic(event){
-  if(event.target?.closest?.('#audio-toggle')||!soundEnabled)return;if(await startBackgroundMusic()){removeEventListener('pointerdown',unlockBackgroundMusic,true);removeEventListener('keydown',unlockBackgroundMusic,true)}
+  if(event.target?.closest?.('#audio-toggle')||!soundEnabled||!backgroundMusic.paused)return;if(await startBackgroundMusic())removeAudioUnlockListeners();
 }
+function removeAudioUnlockListeners(){removeEventListener('pointerup',unlockBackgroundMusic,true);removeEventListener('click',unlockBackgroundMusic,true);removeEventListener('keydown',unlockBackgroundMusic,true)}
+function handleAudioToggle(){if(!soundEnabled){setBackgroundMusic(true);return}if(backgroundMusic.paused){startBackgroundMusic();return}setBackgroundMusic(false)}
 updateAudioUI();
 let interactiveObjects = [];
 let textureProgress = 0;
@@ -796,8 +799,8 @@ document.addEventListener('keydown',e=>{if(e.key==='/'&&!/input|textarea/i.test(
 document.querySelectorAll('.catalog-tabs button').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.catalog-tabs button').forEach(x=>x.classList.toggle('active',x===b));renderCatalog(b.dataset.catalog)}));
 $('info-brief').addEventListener('click',()=>{infoDetailed=false;updateInfoDepth()});
 $('info-detail').addEventListener('click',()=>{infoDetailed=true;updateInfoDepth()});
-$('audio-toggle').addEventListener('click',()=>setBackgroundMusic(!soundEnabled));
-addEventListener('pointerdown',unlockBackgroundMusic,true);addEventListener('keydown',unlockBackgroundMusic,true);
+$('audio-toggle').addEventListener('click',handleAudioToggle);
+addEventListener('pointerup',unlockBackgroundMusic,true);addEventListener('click',unlockBackgroundMusic,true);addEventListener('keydown',unlockBackgroundMusic,true);
 backgroundMusic.addEventListener('error',()=>updateAudioUI('failed'));
 $('play-button').addEventListener('click',()=>{if(mode==='neighborhood')return;playing=!playing;$('play-button').querySelector('span').textContent=playing?'Ⅱ':'▶';$('play-button').querySelector('small').textContent=playing?'暂停':'播放'});
 $('speed-button').addEventListener('click',()=>{speedIndex=(speedIndex+1)%SPEEDS[mode].length;updateSpeedLabel()});
