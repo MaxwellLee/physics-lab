@@ -43,6 +43,7 @@ let genericOrbitGroup = null;
 let sceneLabels = [];
 const backgroundMusic = $('background-music');
 const audioToggle = $('audio-toggle');
+const BACKGROUND_MUSIC_VOLUME = .62;
 let soundEnabled = true;
 let musicStarted = false;
 let musicStarting = false;
@@ -62,7 +63,7 @@ function fadeBackgroundMusic(target,duration=900,onDone){
 
 async function startBackgroundMusic(){
   if(!soundEnabled||musicStarting)return false;musicStarting=true;updateAudioUI('buffering');
-  try{await backgroundMusic.play();musicStarted=true;fadeBackgroundMusic(.18,1500);updateAudioUI('playing');return true}catch(error){console.warn('Background music was blocked or unavailable',error);updateAudioUI(backgroundMusic.error?'failed':'pending');return false}finally{musicStarting=false}
+  try{await backgroundMusic.play();musicStarted=true;fadeBackgroundMusic(BACKGROUND_MUSIC_VOLUME,1100);updateAudioUI('playing');return true}catch(error){console.warn('Background music was blocked or unavailable',error);updateAudioUI(backgroundMusic.error?'failed':'pending');return false}finally{musicStarting=false}
 }
 
 function setBackgroundMusic(enabled){
