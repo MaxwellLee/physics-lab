@@ -7,7 +7,7 @@
   <meta name="description" content="可交互的银河系、太阳系与地月系科学可视化模型">
   <title>银河系 · 物理实验室</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='5' fill='%23fff0b0'/%3E%3Cellipse cx='32' cy='32' rx='27' ry='10' fill='none' stroke='%2360ddff' stroke-width='2'/%3E%3Cellipse cx='32' cy='32' rx='25' ry='9' fill='none' stroke='%2360ddff' stroke-width='1' transform='rotate(60 32 32)'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./style.css?v=20260715-audio2">
 </head>
 <body>
   <canvas id="universe" aria-label="银河系三维交互模型"></canvas>
@@ -17,8 +17,16 @@
   <header class="topbar">
     <a class="back" href="../../" aria-label="返回实验库">← <span>实验库</span></a>
     <div class="title-lockup"><small>EXPERIMENT 002</small><h1>银河系</h1></div>
-    <div class="top-status"><i></i><span id="render-status">GALACTIC MODEL</span><b id="quality-label">AUTO</b></div>
+    <div class="top-actions">
+      <button class="audio-toggle active" id="audio-toggle" type="button" aria-pressed="true" aria-label="播放背景音乐" title="点击播放背景音乐">
+        <span class="audio-visualizer" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="audio-copy"><b>宇宙声景</b><small id="audio-state">点击开启</small></span>
+      </button>
+      <div class="top-status"><i></i><span id="render-status">GALACTIC MODEL</span><b id="quality-label">AUTO</b></div>
+    </div>
   </header>
+
+  <audio id="background-music" loop preload="metadata" src="./audio/decoherence.mp3#t=8"></audio>
 
   <nav class="breadcrumb" id="breadcrumb" aria-label="当前位置">
     <button data-nav="galaxy">银河系</button><i>›</i><span>总览</span>
@@ -30,34 +38,50 @@
   </section>
 
   <aside class="catalog-panel" id="catalog-panel">
+    <button class="panel-close catalog-close" id="catalog-close" aria-label="收起目标导航">×</button>
     <div class="panel-kicker"><span>目标导航</span><small>DESTINATIONS</small></div>
     <div class="catalog-tabs" role="tablist">
       <button class="active" data-catalog="featured">重点目标</button>
       <button data-catalog="systems">恒星系统</button>
     </div>
     <div class="target-list" id="target-list"></div>
-    <p class="catalog-note">银河系内恒星系统彼此相距极远；标记大小采用教学比例。</p>
+    <p class="catalog-note">银河总览只定位太阳邻域；附近恒星在独立的线性光年坐标中展示。</p>
   </aside>
 
   <button class="mobile-catalog" id="mobile-catalog" aria-label="打开目标导航">⌕ <span>目标</span></button>
+  <button class="catalog-reopen" id="catalog-reopen" hidden aria-label="展开目标导航">⌕ <span>导航</span></button>
 
   <aside class="info-panel" id="info-panel" aria-live="polite">
     <button class="panel-close" id="panel-close" aria-label="收起资料卡">×</button>
     <div class="object-type" id="object-type">BARRED SPIRAL GALAXY</div>
     <div class="object-head"><div><h2 id="object-name">银河系</h2><p id="object-en">MILKY WAY</p></div><span id="object-index">MW</span></div>
     <p class="object-summary" id="object-summary"></p>
+    <div class="info-depth" id="info-depth" role="group" aria-label="资料详细程度">
+      <button id="info-brief" class="active" type="button">简版</button>
+      <button id="info-detail" type="button">详细版</button>
+    </div>
     <dl class="metrics" id="object-metrics"></dl>
     <div class="facts" id="object-facts"></div>
+    <div class="object-details" id="object-details" hidden></div>
     <div class="scale-note" id="scale-note"></div>
     <a class="source-link" id="source-link" href="#" target="_blank" rel="noreferrer">查看权威资料 ↗</a>
   </aside>
   <button class="info-reopen" id="info-reopen" hidden>i <span>资料</span></button>
 
   <div class="marker-layer" id="marker-layer" aria-hidden="false">
-    <button class="space-marker major" id="marker-solar" data-target="solar-system"><i></i><span><b>太阳系</b><small>ORION SPUR</small></span></button>
+    <button class="space-marker major" id="marker-neighborhood" data-target="solar-neighborhood"><i></i><span><b>太阳邻域</b><small>ORION SPUR · ZOOM IN</small></span></button>
+    <button class="space-marker major" id="marker-solar" data-target="solar-system"><i></i><span><b>太阳系</b><small>LOCAL ORIGIN · ZOOM IN</small></span></button>
     <button class="space-marker danger" id="marker-sgr" data-target="sagittarius-a"><i></i><span><b>人马座 A*</b><small>GALACTIC CENTER</small></span></button>
+    <button class="space-marker stellar" id="marker-alpha-centauri" data-target="alpha-centauri"><i></i><span><b>南门二系统</b><small>LOCAL NEIGHBORHOOD</small></span></button>
+    <button class="space-marker stellar" id="marker-sirius" data-target="sirius"><i></i><span><b>天狼星系统</b><small>LOCAL NEIGHBORHOOD</small></span></button>
+    <button class="space-marker stellar" id="marker-trappist-1" data-target="trappist-1"><i></i><span><b>TRAPPIST-1</b><small>LOCAL NEIGHBORHOOD</small></span></button>
+    <button class="space-marker stellar" id="marker-betelgeuse" data-target="betelgeuse"><i></i><span><b>参宿四</b><small>LOCAL NEIGHBORHOOD</small></span></button>
+    <button class="space-marker stellar" id="marker-vega" data-target="vega"><i></i><span><b>织女星</b><small>LOCAL NEIGHBORHOOD</small></span></button>
+    <button class="space-marker stellar" id="marker-polaris" data-target="polaris"><i></i><span><b>北极星</b><small>LOCAL NEIGHBORHOOD</small></span></button>
     <button class="space-marker major" id="marker-moon" data-target="moon"><i></i><span><b>月球</b><small>384,400 KM</small></span></button>
   </div>
+  <svg class="marker-leaders" id="marker-leaders" aria-hidden="true"></svg>
+  <div class="system-label-layer" id="system-label-layer" aria-hidden="true"></div>
 
   <div class="mode-caption">
     <small id="mode-kicker">MILKY WAY / SCIENTIFIC RECONSTRUCTION</small>
@@ -70,13 +94,13 @@
   <section class="transport" aria-label="模拟控制">
     <button id="play-button" class="play" aria-label="播放或暂停"><span>Ⅱ</span><small>暂停</small></button>
     <button id="speed-button"><b>100 万年/秒</b><small>时间倍率</small></button>
-    <button id="orbit-button" class="active"><i></i><small>轨道</small></button>
+    <button id="orbit-button" class="active"><i></i><small id="orbit-label">轨道</small></button>
     <button id="label-button" class="active"><i></i><small>标签</small></button>
     <button id="quality-button"><b>AUTO</b><small>画质</small></button>
     <button id="home-button"><span>◎</span><small>银河系</small></button>
   </section>
 
-  <div class="time-readout"><small>模型时间</small><b id="time-value">J2000 + 0 年</b></div>
+  <div class="time-readout"><small id="time-label">模型时间</small><b id="time-value">J2000 + 0 年</b></div>
   <div class="interaction-hint" id="interaction-hint">拖动旋转 · 滚轮缩放 · 点击天体</div>
 
   <dialog id="model-dialog">
@@ -85,6 +109,7 @@
     <p>人类位于银河系内部，从未在银河系外拍摄过银河系全貌。银河系远景依据观测所得的棒旋结构、恒星盘、中央核球和猎户臂位置进行三维科学重建，不是照片。</p>
     <p>银河系、恒星系统、太阳系和地月系的尺度相差巨大。本实验通过分层细节与平滑过渡保持可操作性；天体半径、轨道间距和目标标记均使用明确的教学可视化比例，资料卡中的数值为真实物理量。</p>
     <p>行星位置从 J2000 近似轨道参数推进，适合课堂理解相对位置和周期，不用于航天器导航。系外行星通常没有可靠表面影像，因此只显示基于半径、温度和恒星类型的示意外观。</p>
+    <p class="music-credit">背景音乐：<a href="https://www.scottbuckley.com.au/library/decoherence/" target="_blank" rel="noreferrer">“Decoherence” by Scott Buckley</a>，依据 <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a> 使用。</p>
   </dialog>
   <button class="model-info" id="model-info" aria-label="模型说明">?</button>
 
@@ -113,6 +138,6 @@
     window.addEventListener('unhandledrejection', function () { window.__showGalaxyError('UNEXPECTED STARTUP ERROR'); });
     window.setTimeout(function () { if (!window.__galaxyReady) window.__showGalaxyError('STARTUP TIMEOUT'); }, 15000);
   </script>
-  <script defer src="./app.bundle.js"></script>
+  <script defer src="./app.bundle.js?v=20260715-audio6"></script>
 </body>
 </html>
