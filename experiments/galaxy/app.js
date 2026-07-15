@@ -41,6 +41,38 @@ let cameraTween = null;
 let genericAnimators = [];
 let genericOrbitGroup = null;
 let sceneLabels = [];
+const backgroundMusic = $('background-music');
+const audioToggle = $('audio-toggle');
+let soundEnabled = true;
+let musicStarted = false;
+let musicFadeFrame = 0;
+try { soundEnabled = localStorage.getItem('galaxy-background-music') !== 'off' } catch {}
+backgroundMusic.volume = 0;
+
+function updateAudioUI(state=soundEnabled?(musicStarted?'playing':'pending'):'muted'){
+  const enabled=state!=='muted';audioToggle.classList.toggle('active',enabled);audioToggle.classList.toggle('playing',state==='playing');audioToggle.classList.toggle('failed',state==='failed');audioToggle.setAttribute('aria-pressed',String(enabled));audioToggle.setAttribute('aria-label',enabled?'关闭背景音乐':'开启背景音乐');audioToggle.title=state==='playing'?'关闭背景音乐':state==='failed'?'音乐载入失败，点击重试':enabled?'首次点击页面后播放':'开启背景音乐';audioToggle.querySelector('span').textContent=enabled?'♫':'×';$('audio-state').textContent=state==='playing'?'播放中':state==='failed'?'载入失败':enabled?'待播放':'已静音';
+}
+
+function fadeBackgroundMusic(target,duration=900,onDone){
+  cancelAnimationFrame(musicFadeFrame);const from=backgroundMusic.volume;const started=performance.now();
+  const step=now=>{const progress=Math.min(1,(now-started)/duration);backgroundMusic.volume=THREE.MathUtils.lerp(from,target,1-Math.pow(1-progress,3));if(progress<1)musicFadeFrame=requestAnimationFrame(step);else onDone?.()};
+  musicFadeFrame=requestAnimationFrame(step);
+}
+
+async function startBackgroundMusic(){
+  if(!soundEnabled)return false;
+  try{await backgroundMusic.play();musicStarted=true;fadeBackgroundMusic(.18,1500);updateAudioUI('playing');return true}catch(error){console.warn('Background music was blocked or unavailable',error);updateAudioUI(backgroundMusic.error?'failed':'pending');return false}
+}
+
+function setBackgroundMusic(enabled){
+  soundEnabled=enabled;try{localStorage.setItem('galaxy-background-music',enabled?'on':'off')}catch{}
+  if(enabled)startBackgroundMusic();else{updateAudioUI('muted');fadeBackgroundMusic(0,420,()=>backgroundMusic.pause())}
+}
+
+async function unlockBackgroundMusic(event){
+  if(event.target?.closest?.('#audio-toggle')||!soundEnabled)return;if(await startBackgroundMusic()){removeEventListener('pointerdown',unlockBackgroundMusic,true);removeEventListener('keydown',unlockBackgroundMusic,true)}
+}
+updateAudioUI();
 let interactiveObjects = [];
 let textureProgress = 0;
 const clock = new THREE.Clock();
@@ -764,6 +796,9 @@ document.addEventListener('keydown',e=>{if(e.key==='/'&&!/input|textarea/i.test(
 document.querySelectorAll('.catalog-tabs button').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.catalog-tabs button').forEach(x=>x.classList.toggle('active',x===b));renderCatalog(b.dataset.catalog)}));
 $('info-brief').addEventListener('click',()=>{infoDetailed=false;updateInfoDepth()});
 $('info-detail').addEventListener('click',()=>{infoDetailed=true;updateInfoDepth()});
+$('audio-toggle').addEventListener('click',()=>setBackgroundMusic(!soundEnabled));
+addEventListener('pointerdown',unlockBackgroundMusic,true);addEventListener('keydown',unlockBackgroundMusic,true);
+backgroundMusic.addEventListener('error',()=>updateAudioUI('failed'));
 $('play-button').addEventListener('click',()=>{if(mode==='neighborhood')return;playing=!playing;$('play-button').querySelector('span').textContent=playing?'Ⅱ':'▶';$('play-button').querySelector('small').textContent=playing?'暂停':'播放'});
 $('speed-button').addEventListener('click',()=>{speedIndex=(speedIndex+1)%SPEEDS[mode].length;updateSpeedLabel()});
 $('orbit-button').addEventListener('click',()=>{showOrbits=!showOrbits;$('orbit-button').classList.toggle('active',showOrbits);$('orbit-button').setAttribute('aria-pressed',String(showOrbits));for(const body of solarBodies.values())if(body.orbit)body.orbit.visible=showOrbits;if(neighborhoodOrbitGroup)neighborhoodOrbitGroup.visible=showOrbits;if(roots.earth?.userData.moonOrbit)roots.earth.userData.moonOrbit.visible=showOrbits;if(genericOrbitGroup)genericOrbitGroup.visible=showOrbits;if(blackOrbitGroup&&mode==='blackhole')blackOrbitGroup.visible=showOrbits});

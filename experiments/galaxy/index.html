@@ -17,8 +17,15 @@
   <header class="topbar">
     <a class="back" href="../../" aria-label="返回实验库">← <span>实验库</span></a>
     <div class="title-lockup"><small>EXPERIMENT 002</small><h1>银河系</h1></div>
-    <div class="top-status"><i></i><span id="render-status">GALACTIC MODEL</span><b id="quality-label">AUTO</b></div>
+    <div class="top-actions">
+      <button class="audio-toggle active" id="audio-toggle" type="button" aria-pressed="true" aria-label="关闭背景音乐" title="背景音乐将在首次互动后播放">
+        <span aria-hidden="true">♫</span><b>声音</b><small id="audio-state">待播放</small>
+      </button>
+      <div class="top-status"><i></i><span id="render-status">GALACTIC MODEL</span><b id="quality-label">AUTO</b></div>
+    </div>
   </header>
+
+  <audio id="background-music" loop preload="metadata" src="./audio/decoherence.mp3"></audio>
 
   <nav class="breadcrumb" id="breadcrumb" aria-label="当前位置">
     <button data-nav="galaxy">银河系</button><i>›</i><span>总览</span>
@@ -101,6 +108,7 @@
     <p>人类位于银河系内部，从未在银河系外拍摄过银河系全貌。银河系远景依据观测所得的棒旋结构、恒星盘、中央核球和猎户臂位置进行三维科学重建，不是照片。</p>
     <p>银河系、恒星系统、太阳系和地月系的尺度相差巨大。本实验通过分层细节与平滑过渡保持可操作性；天体半径、轨道间距和目标标记均使用明确的教学可视化比例，资料卡中的数值为真实物理量。</p>
     <p>行星位置从 J2000 近似轨道参数推进，适合课堂理解相对位置和周期，不用于航天器导航。系外行星通常没有可靠表面影像，因此只显示基于半径、温度和恒星类型的示意外观。</p>
+    <p class="music-credit">背景音乐：<a href="https://www.scottbuckley.com.au/library/decoherence/" target="_blank" rel="noreferrer">“Decoherence” by Scott Buckley</a>，依据 <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a> 使用。</p>
   </dialog>
   <button class="model-info" id="model-info" aria-label="模型说明">?</button>
 

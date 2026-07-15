@@ -36,6 +36,11 @@ Planet positions are advanced from approximate J2000 orbital elements with a Kep
 - The solar-neighborhood overview is a separate linear-distance scene with the Sun at the origin and one model unit per light-year. Stellar glow sizes are visibility markers, not physical stellar diameters. Labels appear progressively by observation scale and may be offset for collision avoidance, but each is connected to its projected position by a leader line.
 - The Earth–Moon view places the Sun and other planets on a distant context sphere using approximate heliocentric directions from the same orbital model. Their apparent diameters are deliberately enlarged so they remain identifiable while the user rotates the view; this is a directional sky context, not a claim that planetary disks would look that large to the unaided eye.
 
+## Music
+
+- Background music: [“Decoherence” by Scott Buckley](https://www.scottbuckley.com.au/library/decoherence/), released under [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/). The local MP3 is included unchanged and played at low volume in a loop.
+- Browsers generally block audible autoplay before user interaction. The experiment therefore starts music after the first click or key press, provides a persistent mute control, and remembers the listener's preference locally.
+
 ## Usage
 
 NASA and USGS materials are credited to their originating teams. No NASA or USGS logo is used, and no endorsement is implied. See [NASA media usage guidelines](https://www.nasa.gov/nasa-brand-center/images-and-media/).
