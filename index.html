@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#050810">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23050810'/%3E%3Crect x='14' y='18' width='6' height='28' rx='2' fill='%2355dfff'/%3E%3Crect x='29' y='10' width='6' height='44' rx='2' fill='%2355dfff' opacity='.7'/%3E%3Crect x='44' y='24' width='6' height='16' rx='2' fill='%23ffd596'/%3E%3C/svg%3E">
   <title>物理实验室 · Interactive Physics Lab</title>
   <link rel="stylesheet" href="./assets/lab-theme.css">
 </head>
@@ -22,7 +23,7 @@
       <div class="eyebrow"><span>PHYSICS / VISUALIZED</span></div>
       <h1>把看不见的规律，<br><strong>放进可操控的宇宙。</strong></h1>
       <p>面向课堂演示的交互式物理实验集合。旋转、观察、改变条件，让每一个抽象概念都有空间感。</p>
-      <a class="primary-action" href="./experiments/galaxy/">
+      <a class="primary-action" href="./experiments/circuit-bench/">
         <span>进入最新实验</span><i>↗</i>
       </a>
       <div class="hero-orbit" aria-hidden="true"><i></i><b></b><span></span></div>
@@ -31,9 +32,21 @@
     <section class="collection" aria-labelledby="collection-title">
       <div class="section-head">
         <div><small>EXPERIMENT ARCHIVE</small><h2 id="collection-title">实验库</h2></div>
-        <p>02 个可用实验 · 持续更新</p>
+        <p>03 个可用实验 · 持续更新</p>
       </div>
       <div class="experiment-grid">
+        <a class="experiment-card featured" href="./experiments/circuit-bench/">
+          <div class="card-visual circuit-visual" aria-hidden="true">
+            <span class="cb-loop"></span><span class="cb-cell"><i></i><i></i></span><span class="cb-meter"></span><span class="cb-bulb"></span><b class="cb-dot"></b>
+            <div class="scan-label">CIRCUIT BENCH · DC</div>
+          </div>
+          <div class="card-copy">
+            <div class="card-meta"><span>电磁学</span><time>EXP. 003</time></div>
+            <h3>电学实验台</h3>
+            <p>自由搭建初中电路：实物接线一键生成电路图，看见电流、电子与电势。</p>
+            <div class="card-foot"><span>开始搭建</span><b>→</b></div>
+          </div>
+        </a>
         <a class="experiment-card featured" href="./experiments/galaxy/">
           <div class="card-visual galaxy-visual" aria-hidden="true">
             <span class="galaxy-core"></span><i class="galaxy-arm arm-a"></i><i class="galaxy-arm arm-b"></i><i class="galaxy-arm arm-c"></i>

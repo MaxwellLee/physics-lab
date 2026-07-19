@@ -64,3 +64,21 @@ npm run build:galaxy
 物理关系参考：[NASA 日月食几何](https://science.nasa.gov/eclipses/geometry/)、[NASA 日月食与月球](https://science.nasa.gov/moon/eclipses/)、[NASA 月球轨道参数](https://eclipse.gsfc.nasa.gov/SEhelp/moonorbit.html)。
 
 纹理来源、处理方法和署名见 [`assets/textures/SOURCES.md`](assets/textures/SOURCES.md)。
+
+## 电学实验台
+
+`experiments/circuit-bench/` 是面向初中电学的自由搭建实验台（EXP.003）：拟真实物元件 + 拖线/点按接线，一键把实物图转换成横平竖直的标准电路图；附带电流与电子流向演示、电势标尺（两点电势差测量）、水路类比视图、数据记录与 I-U 描点图。内置 8 个正确示范与 7 个错误排查演示电路（短路、断路、电表接反、串错电压表等）。
+
+物理模型为初中理想模型（电表无内阻、电源无内阻、参数全可调），直流稳态用改进节点分析（MNA）求解，非线性灯泡采用经验 R(U) 模型。理想化清单、元件数据与教学依据见 [`experiments/circuit-bench/SOURCES.md`](experiments/circuit-bench/SOURCES.md)。
+
+修改 `experiments/circuit-bench/app.js`、`data.js` 或 `src/` 后运行：
+
+```powershell
+npm run build:circuit-bench
+```
+
+物理引擎可脱离浏览器独立测试（欧姆定律、串并联、短路、熔断、二极管、非线性灯泡、预设实例化等 18 个用例）：
+
+```powershell
+npm run test:circuit-bench
+```

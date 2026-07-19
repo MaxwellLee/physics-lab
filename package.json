@@ -4,9 +4,11 @@
   "private": true,
   "description": "面向课堂演示的交互式物理实验库",
   "scripts": {
-    "build": "npm run build:eclipse && npm run build:galaxy",
+    "build": "npm run build:eclipse && npm run build:galaxy && npm run build:circuit-bench",
     "build:eclipse": "esbuild ./experiments/eclipse/app.js --bundle --format=iife --target=es2020 --minify --loader:.jpg=dataurl --loader:.png=dataurl --outfile=./experiments/eclipse/app.bundle.js",
-    "build:galaxy": "esbuild ./experiments/galaxy/app.js --bundle --format=iife --target=es2020 --minify --outfile=./experiments/galaxy/app.bundle.js"
+    "build:galaxy": "esbuild ./experiments/galaxy/app.js --bundle --format=iife --target=es2020 --minify --outfile=./experiments/galaxy/app.bundle.js",
+    "build:circuit-bench": "esbuild ./experiments/circuit-bench/app.js --bundle --format=iife --target=es2020 --minify --outfile=./experiments/circuit-bench/app.bundle.js",
+    "test:circuit-bench": "node ./experiments/circuit-bench/tests/solver.test.mjs"
   },
   "dependencies": {
     "three": "0.180.0"

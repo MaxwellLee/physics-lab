@@ -1,0 +1,283 @@
+/* 电学实验台样式 · 与全站 lab-theme 色系对齐 */
+:root {
+  --cyan: #60ddff; --cyan2: #1aa7d8; --text: #edf8fb; --muted: #758995;
+  --line: rgba(138, 198, 218, .18); --panel: rgba(5, 11, 20, .78);
+  --warm: #ffd596; --danger: #ff9f74; --amber: #ffca7a; --lime: #b9ffda;
+  --font: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+* { box-sizing: border-box }
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #04070d; color: var(--text); font-family: var(--font) }
+button, input, select { font: inherit; color: inherit }
+button { cursor: pointer }
+button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px }
+
+.bench-grid { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .5;
+  background-image: linear-gradient(rgba(255,255,255,.022) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.022) 1px, transparent 1px);
+  background-size: 40px 40px; mask-image: radial-gradient(circle at 50% 46%, black 30%, transparent 88%) }
+.vignette { position: fixed; inset: 0; z-index: 2; pointer-events: none;
+  background: radial-gradient(circle at 50% 46%, transparent 38%, rgba(0, 2, 8, .22) 68%, rgba(0, 2, 8, .8) 120%) }
+
+#stage { position: fixed; inset: 0; z-index: 1 }
+#bench-svg, #schematic-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none }
+#water-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block }
+#schematic-svg[hidden], #water-canvas[hidden] { display: none !important }
+
+/* —— 顶栏 —— */
+.topbar { position: fixed; z-index: 20; left: 0; right: 0; top: 0; height: 76px; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); background: linear-gradient(180deg, rgba(2, 5, 11, .88), rgba(2, 5, 11, .22)) }
+.back { display: flex; gap: 10px; color: #a4b4bb; text-decoration: none; font-size: 12px; letter-spacing: .13em }
+.back:hover { color: var(--cyan) }
+.title-lockup { text-align: center; position: absolute; left: 50%; transform: translateX(-50%) }
+.title-lockup small { display: block; color: var(--cyan); font-size: 9px; letter-spacing: .25em; margin-bottom: 4px }
+.title-lockup h1 { margin: 0; font-size: 18px; font-weight: 520; letter-spacing: .14em }
+.top-status { display: flex; align-items: center; gap: 8px; font-size: 9px; letter-spacing: .15em; color: #6f858f }
+.top-status i { width: 6px; height: 6px; border-radius: 50%; background: #6dffc0; box-shadow: 0 0 9px #6dffc0 }
+.top-status i.warn { background: var(--danger); box-shadow: 0 0 9px var(--danger) }
+.top-status b { font-weight: 500; color: var(--cyan); padding-left: 9px; border-left: 1px solid var(--line) }
+
+/* —— 事件横幅 —— */
+.event-banner { position: fixed; z-index: 30; left: 50%; top: 92px; transform: translateX(-50%); display: flex; align-items: center; gap: 14px; max-width: min(620px, calc(100vw - 40px)); padding: 12px 18px; border: 1px solid rgba(255, 159, 116, .45); background: rgba(43, 14, 8, .88); backdrop-filter: blur(12px); box-shadow: 0 18px 60px rgba(0, 0, 0, .5) }
+.event-banner[hidden] { display: none !important }
+.event-banner b { font-size: 13px; color: #ffc9a8; letter-spacing: .06em; white-space: nowrap }
+.event-banner span { font-size: 11px; line-height: 1.6; color: #b9a29a }
+.event-banner button { border: 1px solid rgba(255, 159, 116, .4); background: transparent; color: var(--danger); padding: 6px 12px; font-size: 11px; white-space: nowrap }
+.event-banner button:hover { background: rgba(255, 159, 116, .12) }
+
+/* —— 左侧面板（元件与演示） —— */
+.library-panel, .inspector-panel { position: fixed; z-index: 14; top: 96px; border: 1px solid var(--line); background: var(--panel); backdrop-filter: blur(16px); box-shadow: 0 24px 60px rgba(0, 0, 0, .18); transition: transform .3s ease, opacity .3s ease }
+.library-panel { left: 20px; width: 292px; padding: 20px; max-height: calc(100vh - 210px); display: flex; flex-direction: column }
+.library-panel:before { content: ""; position: absolute; left: -1px; top: 24px; width: 2px; height: 42px; background: var(--cyan); box-shadow: 0 0 13px var(--cyan) }
+.library-panel.collapsed { transform: translateX(calc(-100% - 25px)); opacity: 0; pointer-events: none }
+.panel-kicker, .insp-kicker { display: flex; justify-content: space-between; align-items: center; font-size: 13px; letter-spacing: .12em; margin-bottom: 14px; padding-right: 22px }
+.panel-kicker small, .insp-kicker small { font-size: 8px; color: #607681; letter-spacing: .18em }
+.panel-close { position: absolute; right: 9px; top: 8px; border: 0; background: transparent; color: #667b85; font-size: 22px; padding: 4px 7px }
+.panel-close:hover { color: var(--text) }
+.library-tabs { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); padding: 3px; margin-bottom: 12px }
+.library-tabs button { border: 0; background: transparent; padding: 9px 6px; color: #657984; font-size: 11px }
+.library-tabs button.active { color: var(--cyan); background: rgba(55, 173, 211, .11) }
+.library-scroll { overflow-y: auto; overflow-x: hidden; min-height: 0 }
+.cat-group { margin-bottom: 12px }
+.cat-group > small { display: block; font-size: 9px; letter-spacing: .2em; color: #5b727d; margin: 8px 0 6px }
+.comp-item { width: 100%; display: grid; grid-template-columns: 26px 1fr; gap: 9px; align-items: center; border: 1px solid transparent; background: transparent; text-align: left; padding: 8px 9px; color: #80949d }
+.comp-item:hover, .comp-item.armed { color: var(--text); border-color: rgba(96, 221, 255, .22); background: rgba(52, 169, 205, .08) }
+.comp-item > i { width: 22px; height: 22px; border: 1px solid currentColor; border-radius: 4px; display: grid; place-items: center; font-style: normal; font-size: 10px }
+.comp-item b { font-size: 12px; font-weight: 500 }
+.comp-item small { display: block; margin-top: 2px; color: #576d78; font-size: 9px; line-height: 1.4 }
+.preset-group-label { font-size: 9px; letter-spacing: .2em; color: #5b727d; margin: 10px 0 6px }
+.preset-item { width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 8px; border: 1px solid transparent; background: transparent; text-align: left; padding: 10px 9px; color: #80949d }
+.preset-item:hover, .preset-item.active { color: var(--text); border-color: rgba(96, 221, 255, .22); background: rgba(52, 169, 205, .08) }
+.preset-item.bad:hover, .preset-item.bad.active { border-color: rgba(255, 159, 116, .3); background: rgba(205, 105, 52, .08) }
+.preset-item b { font-size: 12px; font-weight: 500 }
+.preset-item small { display: block; margin-top: 3px; color: #576d78; font-size: 9px; line-height: 1.5 }
+.preset-item em { font-style: normal; color: #50636d; font-size: 9px; align-self: start }
+
+/* —— 右侧面板（资料与数据） —— */
+.inspector-panel { right: 20px; width: 352px; max-height: calc(100vh - 210px); overflow-y: auto; overflow-x: hidden; padding: 24px 22px 20px }
+.inspector-panel.collapsed { transform: translateX(calc(100% + 25px)); opacity: 0; pointer-events: none }
+.insp-section { margin-bottom: 22px }
+.insp-empty { font-size: 11px; line-height: 1.7; color: #5f747f; margin: 0 }
+.object-head { display: flex; justify-content: space-between; gap: 12px; align-items: start }
+.object-head h2, .object-head h3 { font-size: 24px; font-weight: 430; margin: 0 }
+.object-head h3 { font-size: 20px }
+.object-head p { font-size: 10px; color: #6c838d; letter-spacing: .17em; margin: 5px 0 0 }
+.object-head > span { font-size: 10px; color: #536873; border: 1px solid var(--line); padding: 6px 7px; white-space: nowrap }
+.object-summary { font-size: 12px; line-height: 1.8; color: #93a5ac; margin: 14px 0 }
+.info-depth { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 3px; margin: 0 0 14px; border: 1px solid var(--line) }
+.info-depth button { border: 0; background: transparent; color: #6f838c; padding: 7px 8px; font-size: 10px }
+.info-depth button.active { color: var(--cyan); background: rgba(55, 173, 211, .11) }
+.object-details { display: grid; gap: 12px; margin-bottom: 14px }
+.object-details section { padding: 12px; border: 1px solid rgba(96, 221, 255, .12); background: rgba(28, 76, 92, .055) }
+.object-details p { margin: 0; color: #82969e; font-size: 10.5px; line-height: 1.8; overflow-wrap: anywhere }
+.metrics { display: grid; grid-template-columns: 1fr 1fr; margin: 0 0 14px; border-top: 1px solid var(--line); border-left: 1px solid var(--line) }
+.metrics > div { padding: 10px 12px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line) }
+.metrics dt { font-size: 8px; color: #607580; letter-spacing: .1em }
+.metrics dd { margin: 5px 0 0; font-size: 13px; color: #e2f1f4 }
+.metrics dd.neg { color: var(--danger) }
+.param-list { display: grid; gap: 10px; margin-bottom: 14px }
+.param-row { display: grid; grid-template-columns: 74px 1fr 66px; gap: 9px; align-items: center; font-size: 11px; color: #8fa3ab }
+.param-row input[type="range"] { width: 100%; accent-color: var(--cyan); height: 14px }
+.param-row output { font-size: 11px; color: var(--text); text-align: right; white-space: nowrap }
+.param-row select, .data-controls select { width: 100%; background: rgba(9, 17, 28, .9); border: 1px solid var(--line); color: var(--text); font-size: 11px; padding: 6px 8px }
+.param-check { display: flex; gap: 8px; align-items: center; font-size: 11px; color: #8fa3ab; cursor: pointer }
+.param-check input { accent-color: var(--cyan); width: 15px; height: 15px }
+.sel-actions { display: flex; flex-wrap: wrap; gap: 8px }
+.sel-actions button { border: 1px solid var(--line); background: rgba(52, 169, 205, .07); color: var(--cyan); padding: 8px 12px; font-size: 11px }
+.sel-actions button:hover { background: rgba(52, 169, 205, .16) }
+.sel-actions button.danger { color: var(--danger); border-color: rgba(255, 159, 116, .3); background: rgba(205, 105, 52, .06) }
+.meter-list { display: grid; gap: 7px }
+.meter-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; padding: 9px 11px; border: 1px solid var(--line); background: rgba(9, 17, 28, .5); font-size: 11px }
+.meter-row b { font-weight: 500; color: #b9cdd3 }
+.meter-row span { color: var(--cyan); font-variant-numeric: tabular-nums }
+.meter-row span.neg { color: var(--danger) }
+.meter-row small { display: block; grid-column: 1 / -1; color: #5b707b; font-size: 9px }
+.data-controls { display: grid; grid-template-columns: 1fr auto auto; gap: 7px; margin-bottom: 10px }
+.data-controls button { border: 1px solid var(--line); background: rgba(52, 169, 205, .07); color: var(--cyan); padding: 6px 10px; font-size: 10px; white-space: nowrap }
+.data-controls button:hover { background: rgba(52, 169, 205, .16) }
+.data-table { width: 100%; border-collapse: collapse; margin-bottom: 10px }
+.data-table th, .data-table td { border: 1px solid var(--line); padding: 6px 8px; font-size: 10.5px; text-align: right; color: #a9bcc4 }
+.data-table th { color: #607580; font-size: 8.5px; letter-spacing: .08em; text-align: center }
+.data-table td:first-child, .data-table th:first-child { text-align: center; color: #5b707b }
+.plot { width: 100%; height: 190px; display: block; border: 1px solid var(--line); background: rgba(6, 12, 21, .6) }
+.data-hint { font-size: 9.5px; line-height: 1.7; color: #5b707b; margin: 8px 0 0 }
+.concept-list { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 12px }
+.concept-list button { border: 1px solid var(--line); background: transparent; color: #8fa3ab; padding: 7px 11px; font-size: 10.5px }
+.concept-list button:hover, .concept-list button.active { color: var(--cyan); border-color: rgba(96, 221, 255, .3); background: rgba(52, 169, 205, .08) }
+
+/* —— 恢复按钮 —— */
+.library-reopen, .inspector-reopen { position: fixed; z-index: 16; top: 50%; transform: translateY(-50%); width: 38px; padding: 13px 7px; border: 1px solid var(--line); background: var(--panel); color: var(--cyan); font-size: 12px; display: flex; flex-direction: column; align-items: center; gap: 6px; backdrop-filter: blur(16px) }
+.library-reopen { left: 0; border-left: 0; border-radius: 0 6px 6px 0 }
+.inspector-reopen { right: 0; border-right: 0; border-radius: 6px 0 0 6px }
+.library-reopen[hidden], .inspector-reopen[hidden] { display: none !important }
+.library-reopen span, .inspector-reopen span { writing-mode: vertical-rl; letter-spacing: .12em; color: #82949c }
+
+/* —— 提示条 —— */
+.hint-bar { position: fixed; z-index: 7; left: 50%; bottom: 96px; transform: translateX(-50%); font-size: 9px; letter-spacing: .12em; color: #596f79; text-align: center; max-width: calc(100vw - 760px); line-height: 1.8 }
+
+/* —— 运输条 —— */
+.transport { position: fixed; z-index: 18; left: 50%; bottom: 18px; transform: translateX(-50%); height: 68px; display: flex; align-items: stretch; border: 1px solid var(--line); background: rgba(4, 10, 18, .76); backdrop-filter: blur(15px); padding: 5px }
+.transport button { min-width: 68px; border: 0; border-right: 1px solid var(--line); background: transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px }
+.transport button:last-child { border: 0 }
+.transport button:hover, .transport button.active { background: rgba(51, 171, 210, .09); color: var(--cyan) }
+.transport .play { min-width: 54px; color: var(--cyan); border: 1px solid rgba(96, 221, 255, .32); margin-right: 5px }
+.transport button span { font-size: 14px }
+.transport button b { font-size: 10px; font-weight: 500; white-space: nowrap }
+.transport button i { width: 10px; height: 10px; border: 1px solid currentColor; border-radius: 50% }
+.transport button.active i { background: var(--cyan); box-shadow: 0 0 8px var(--cyan) }
+.transport small { font-size: 8px; color: #6b7f89; letter-spacing: .08em; white-space: nowrap }
+
+/* —— 模型说明按钮与对话框 —— */
+.model-info { position: fixed; z-index: 17; right: 20px; bottom: 20px; width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 50%; background: rgba(4, 10, 18, .72); color: var(--cyan); font-size: 14px }
+dialog { width: min(560px, calc(100vw - 30px)); max-height: calc(100vh - 60px); overflow-y: auto; border: 1px solid rgba(96, 221, 255, .35); background: rgba(5, 11, 20, .97); color: var(--text); padding: 34px; box-shadow: 0 30px 100px #000 }
+dialog::backdrop { background: rgba(0, 2, 7, .72) }
+dialog > small { font-size: 9px; color: var(--cyan); letter-spacing: .22em }
+dialog h2 { font-size: 26px; font-weight: 400; margin: 8px 0 20px }
+dialog p { font-size: 12px; line-height: 1.8; color: #8da0a8 }
+dialog .tip { border-top: 1px solid var(--line); padding-top: 14px; color: #7d919b }
+.dialog-close { position: absolute; right: 13px; top: 10px; border: 0; background: transparent; color: #748994; font-size: 21px }
+
+/* —— 电势标尺 —— */
+.potential-legend { position: absolute; z-index: 6; right: 26px; top: 50%; transform: translateY(-50%); display: grid; grid-template-columns: auto auto; grid-template-rows: repeat(3, auto); gap: 4px 9px; align-items: center; padding: 12px; border: 1px solid var(--line); background: rgba(4, 10, 18, .72); backdrop-filter: blur(10px) }
+.potential-legend[hidden] { display: none !important }
+.potential-legend small { grid-column: 1 / -1; font-size: 8px; letter-spacing: .18em; color: #6f858f; text-align: center }
+.legend-bar { grid-row: 2 / 5; width: 12px; height: 130px; border: 1px solid var(--line) }
+.legend-bar i { display: block; width: 100%; height: 100%; background: linear-gradient(to top, #3ec6f0, #ffd596) }
+.potential-legend b { font-size: 9px; font-weight: 500; color: #9cb0b8; font-variant-numeric: tabular-nums }
+.schematic-note { position: absolute; z-index: 6; left: 50%; top: 90px; transform: translateX(-50%); font-size: 9px; letter-spacing: .14em; color: #5b707b }
+.schematic-note[hidden] { display: none !important }
+
+/* —— SVG 元件与导线 —— */
+.comp { cursor: grab }
+.comp:active { cursor: grabbing }
+.comp.selected .comp-frame { stroke: var(--cyan); stroke-width: 1.6; filter: drop-shadow(0 0 6px rgba(96, 221, 255, .5)) }
+.comp-frame { fill: rgba(10, 18, 30, .92); stroke: rgba(138, 198, 218, .32); stroke-width: 1 }
+.comp-label { fill: #93a8b1; font-size: 11px; letter-spacing: .08em; text-anchor: middle; pointer-events: none; user-select: none }
+.comp-sub { fill: #5d7480; font-size: 8.5px; letter-spacing: .1em; text-anchor: middle; pointer-events: none; user-select: none }
+.term-label { font-size: 9px; font-weight: 600; text-anchor: middle; pointer-events: none; user-select: none }
+.term-label.pos { fill: #ff9d8a }
+.term-label.neg { fill: #7fb7cc }
+.terminal { fill: #0d1622; stroke: #8fa9b6; stroke-width: 1.4; cursor: crosshair }
+.terminal.pos { stroke: #e8836f }
+.terminal.neg { stroke: #6fb7cf }
+.terminal:hover, .terminal.snap { fill: rgba(96, 221, 255, .35); stroke: var(--cyan) }
+.terminal.armed { fill: rgba(96, 221, 255, .5); stroke: var(--cyan); animation: termPulse 1s ease-in-out infinite }
+@keyframes termPulse { 50% { stroke-width: 3 } }
+.wire-path { fill: none; stroke: #c8a25e; stroke-width: 3.4; stroke-linecap: round; pointer-events: none }
+.wire-hit { fill: none; stroke: transparent; stroke-width: 16; cursor: pointer }
+.wire.selected .wire-path { stroke: var(--cyan); filter: drop-shadow(0 0 5px rgba(96, 221, 255, .6)) }
+.wire-draft { fill: none; stroke: var(--cyan); stroke-width: 2.4; stroke-dasharray: 6 5; pointer-events: none; opacity: .85 }
+.wire.sagging .wire-path { stroke: #b1914f }
+.needle { stroke: #ff8f6a; stroke-width: 1.8; stroke-linecap: round }
+.meter-face { fill: #0a1420; stroke: rgba(138, 198, 218, .3) }
+.meter-tick { stroke: #56707d; stroke-width: 1 }
+.meter-text { fill: #6d8590; font-size: 8px; text-anchor: middle; user-select: none; pointer-events: none }
+.bulb-glass { fill: rgba(255, 213, 150, .1); stroke: rgba(255, 213, 150, .4) }
+.bulb-glass.on { fill: rgba(255, 205, 120, .85); filter: drop-shadow(0 0 14px rgba(255, 190, 90, .8)) }
+.bulb-nl .bulb-glass { fill: rgba(255, 170, 120, .12); stroke: rgba(255, 170, 120, .45) }
+.bulb-nl .bulb-glass.on { fill: rgba(255, 160, 90, .9) }
+.filament { fill: none; stroke: #d8a75e; stroke-width: 1.6 }
+.flow-dot { pointer-events: none }
+.flow-arrow { pointer-events: none }
+.pot-wire { stroke-width: 4.2 }
+.pot-readout { fill: var(--text); font-size: 11px; user-select: none }
+.pot-pin { fill: none; stroke: var(--text); stroke-width: 1.2 }
+
+/* —— 元件动态状态 —— */
+.terminal-hit, .comp-hit { pointer-events: all }
+.blade { transition: transform .18s ease }
+.needle-g { transition: transform .22s ease }
+.supply-knob { transition: transform .15s ease }
+.rheo-slider { transition: transform .1s ease-out }
+.meter-val, .box-val, .supply-volt { fill: #9fc3d1; text-anchor: middle; user-select: none; pointer-events: none }
+.switch-state, .rheo-val, .specimen-label { pointer-events: none; user-select: none }
+.comp.overrange .needle { stroke: #ff6a55 }
+.comp.overrange .meter-face { stroke: rgba(255, 106, 85, .55) }
+.led-dome { transition: fill .2s ease }
+.led-dome.lit { fill: rgba(120, 235, 255, .85); filter: drop-shadow(0 0 12px rgba(96, 221, 255, .8)) }
+.fuse-broken line, .fuse-broken path { stroke: #ff8f6a }
+.motor-fan { transform-box: fill-box; transform-origin: center }
+.comp.active-load .motor-fan { animation: fanSpin 1.1s linear infinite }
+.bell-hammer { transform-box: fill-box; transform-origin: right bottom }
+.comp.active-load .bell-hammer { animation: bellRing .3s ease-in-out infinite alternate }
+@keyframes fanSpin { to { transform: rotate(360deg) } }
+@keyframes bellRing { from { transform: rotate(-8deg) } to { transform: rotate(8deg) } }
+
+/* 电路图视图 */
+.sch-wire { fill: none; stroke: #9fd9ee; stroke-width: 1.8 }
+.sch-sym { fill: none; stroke: #d5ecf4; stroke-width: 1.8; stroke-linecap: round }
+.sch-fill { fill: #d5ecf4; stroke: none }
+.sch-junction { fill: #9fd9ee }
+.sch-label { fill: #7d95a0; font-size: 10px; text-anchor: middle; user-select: none }
+.sch-title { fill: #9fb6c0; font-size: 12px; letter-spacing: .1em }
+
+/* —— 加载层 —— */
+.loading { position: fixed; z-index: 50; inset: 0; background: #03060c; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity .8s, visibility .8s }
+.loading.done { opacity: 0; visibility: hidden }
+.loading-circuit { width: 110px; height: 60px; position: relative }
+.loading-circuit i { position: absolute; top: 10px; width: 34px; height: 40px; border: 1px solid rgba(96, 221, 255, .5) }
+.loading-circuit i:first-child { left: 0 }
+.loading-circuit i:nth-child(2) { right: 0; border-color: rgba(255, 213, 150, .5) }
+.loading-circuit b { position: absolute; left: 51px; top: 26px; width: 8px; height: 8px; border-radius: 50%; background: var(--warm); box-shadow: 0 0 14px var(--warm); animation: loadPulse 1.2s ease-in-out infinite }
+.loading-circuit span { position: absolute; left: 34px; right: 34px; top: 29px; height: 1px; background: rgba(96, 221, 255, .4) }
+@keyframes loadPulse { 50% { opacity: .35 } }
+.loading p { font-size: 13px; letter-spacing: .13em; margin: 24px 0 6px }
+.loading > small { font-size: 9px; color: #516a76; letter-spacing: .2em }
+.loading-error { width: min(360px, calc(100vw - 44px)); margin-top: 24px; padding: 18px; border: 1px solid rgba(255, 126, 105, .3); background: rgba(84, 22, 18, .12); text-align: center }
+.loading-error b { font-size: 12px; font-weight: 500; color: #ffc3b8 }
+.loading-error p { font-size: 10px; line-height: 1.7; color: #8ea0a8; margin: 8px 0 0 }
+.loading.failed .loading-circuit b { animation-duration: 2.4s; background: #ff806c; box-shadow: 0 0 14px #ff806c }
+
+/* —— 响应式 —— */
+@media (max-width: 1050px) {
+  .library-panel { width: 262px }
+  .inspector-panel { width: 330px }
+  .hint-bar { max-width: calc(100vw - 660px) }
+}
+@media (max-width: 800px) {
+  .topbar { height: 64px; padding: 0 14px }
+  .title-lockup h1 { font-size: 17px }
+  .top-status span { display: none }
+  .library-panel { top: 76px; left: 10px; right: 10px; width: auto; max-height: 46vh; z-index: 22 }
+  .inspector-panel { top: 76px; right: 10px; width: min(340px, calc(100vw - 20px)); max-height: 52vh; z-index: 22 }
+  .library-reopen, .inspector-reopen { top: auto; bottom: 180px; transform: none }
+  .hint-bar { display: none }
+  .transport { bottom: 8px; height: 74px; width: calc(100vw - 16px); justify-content: center }
+  .transport button { min-width: 0; flex: 1 }
+  .transport button b { font-size: 9px }
+  .transport small { font-size: 7px }
+  .model-info { right: 10px; bottom: 94px }
+  .event-banner { top: 72px }
+  .potential-legend { right: 10px; top: 42% }
+}
+@media (max-width: 520px) {
+  .back span, .title-lockup small, .top-status b { display: none }
+  .title-lockup h1 { font-size: 16px }
+  .object-head h2 { font-size: 21px }
+  .inspector-panel { padding: 20px 16px }
+  .transport { height: 78px }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terminal.armed { animation: none }
+  .loading-circuit b { animation: none }
+  .comp.active-load .motor-fan, .comp.active-load .bell-hammer { animation: none }
+  * { transition-duration: .01s !important }
+}

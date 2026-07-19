@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+  <meta name="theme-color" content="#04070d">
+  <meta name="description" content="可自由搭建的初中电学实验台：实物接线、标准电路图、电流与电子流向、电势标尺与水路类比">
+  <title>电学实验台 · 物理实验室</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='8' y='26' width='14' height='12' rx='2' fill='none' stroke='%2360ddff' stroke-width='2'/%3E%3Ccircle cx='44' cy='32' r='9' fill='none' stroke='%23ffd596' stroke-width='2'/%3E%3Cpath d='M22 32h13M53 32h3' stroke='%2360ddff' stroke-width='2'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="bench-grid" aria-hidden="true"></div>
+  <div class="vignette" aria-hidden="true"></div>
+
+  <main id="stage">
+    <svg id="bench-svg" role="img" aria-label="电路实物搭建台"></svg>
+    <svg id="schematic-svg" role="img" aria-label="由实物图生成的标准电路图" hidden></svg>
+    <canvas id="water-canvas" aria-label="水路类比演示" hidden></canvas>
+    <div class="potential-legend" id="potential-legend" hidden>
+      <small>电势 / V</small>
+      <div class="legend-bar"><i id="legend-gradient"></i></div>
+      <b id="legend-max">—</b><b id="legend-mid">—</b><b id="legend-min">—</b>
+    </div>
+    <div class="schematic-note" id="schematic-note" hidden>由实物图自动生成 · 布局可能与标准画法不同</div>
+  </main>
+
+  <header class="topbar">
+    <a class="back" href="../../" aria-label="返回实验库">← <span>实验库</span></a>
+    <div class="title-lockup"><small>EXPERIMENT 003</small><h1>电学实验台</h1></div>
+    <div class="top-status"><i id="status-dot"></i><span id="sim-status">CIRCUIT READY</span><b id="view-status">实物台</b></div>
+  </header>
+
+  <div class="event-banner" id="event-banner" hidden>
+    <b id="event-title"></b><span id="event-detail"></span><button id="event-dismiss" aria-label="知道了">知道了</button>
+  </div>
+
+  <aside class="library-panel" id="library-panel">
+    <button class="panel-close" id="library-close" aria-label="收起元件与演示面板">×</button>
+    <div class="panel-kicker"><span>元件与演示</span><small>LIBRARY</small></div>
+    <div class="library-tabs" role="tablist">
+      <button class="active" data-lib="components" role="tab">元件箱</button>
+      <button data-lib="presets" role="tab">演示电路</button>
+    </div>
+    <div class="library-scroll" id="library-scroll">
+      <div id="component-list"></div>
+      <div id="preset-list" hidden></div>
+    </div>
+  </aside>
+  <button class="library-reopen" id="library-reopen" hidden aria-label="展开元件与演示面板">☰ <span>元件</span></button>
+
+  <aside class="inspector-panel" id="inspector-panel" aria-live="polite">
+    <button class="panel-close" id="inspector-close" aria-label="收起资料面板">×</button>
+    <section class="insp-section" id="sec-selected">
+      <div class="insp-kicker"><span>选中元件</span><small>COMPONENT</small></div>
+      <p class="insp-empty" id="selected-empty">未选中元件。点击台面上的元件查看参数、读数与资料；从元件箱添加新元件。</p>
+      <div id="selected-body" hidden>
+        <div class="object-head"><div><h2 id="sel-name"></h2><p id="sel-kind"></p></div><span id="sel-code"></span></div>
+        <p class="object-summary" id="sel-brief"></p>
+        <div class="info-depth" id="sel-depth" role="group" aria-label="资料详细程度">
+          <button id="sel-brief-btn" class="active" type="button">简版</button>
+          <button id="sel-detail-btn" type="button">详细版</button>
+        </div>
+        <div class="object-details" id="sel-detail" hidden></div>
+        <dl class="metrics" id="sel-reading"></dl>
+        <div class="param-list" id="sel-params"></div>
+        <div class="sel-actions" id="sel-actions"></div>
+      </div>
+    </section>
+    <section class="insp-section" id="sec-meters">
+      <div class="insp-kicker"><span>实时读数</span><small>READINGS</small></div>
+      <div class="meter-list" id="meter-list"><p class="insp-empty">电路中还没有电表或电源。从元件箱添加后，这里会显示实时读数。</p></div>
+    </section>
+    <section class="insp-section" id="sec-data">
+      <div class="insp-kicker"><span>数据记录与图像</span><small>DATA &amp; GRAPH</small></div>
+      <div class="data-controls">
+        <select id="data-target" aria-label="选择测量对象"></select>
+        <button id="data-record" type="button">记录 (U, I)</button>
+        <button id="data-clear" type="button">清空</button>
+      </div>
+      <table class="data-table" id="data-table" aria-label="实验数据表">
+        <thead><tr><th>#</th><th>U / V</th><th>I / A</th><th>R / Ω</th></tr></thead>
+        <tbody id="data-tbody"></tbody>
+      </table>
+      <svg class="plot" id="plot-svg" aria-label="I-U 伏安特性图像"></svg>
+      <p class="data-hint">图像纵轴为电流 I（A），横轴为电压 U（V）。定值电阻的图像是过原点的直线；非线性灯泡的图像会变弯。</p>
+    </section>
+    <section class="insp-section" id="sec-concept">
+      <div class="insp-kicker"><span>概念资料</span><small>NOTES</small></div>
+      <div class="concept-list" id="concept-list"></div>
+      <div class="concept-body" id="concept-body" hidden>
+        <div class="object-head"><div><h3 id="concept-title"></h3><p id="concept-en"></p></div></div>
+        <div class="info-depth" role="group" aria-label="资料详细程度">
+          <button id="concept-brief-btn" class="active" type="button">简版</button>
+          <button id="concept-detail-btn" type="button">详细版</button>
+        </div>
+        <p class="object-summary" id="concept-text"></p>
+      </div>
+    </section>
+  </aside>
+  <button class="inspector-reopen" id="inspector-reopen" hidden aria-label="展开资料面板">i <span>资料</span></button>
+
+  <div class="hint-bar" id="hint-bar">从元件箱点选元件放到台面 · 从接线柱拖出导线，或点两个接线柱连线 · 点击元件查看参数</div>
+
+  <section class="transport" aria-label="实验控制">
+    <button id="play-button" class="play" aria-label="播放或暂停动画"><span>Ⅱ</span><small>暂停</small></button>
+    <button id="speed-button" aria-label="切换动画速度"><b>1×</b><small>动画速度</small></button>
+    <button id="flow-button" aria-label="切换电流与电子流向演示"><b>流向 · 关</b><small>电流 / 电子</small></button>
+    <button id="potential-button" aria-label="开关电势标尺" aria-pressed="false"><i></i><small>电势</small></button>
+    <button id="view-button" aria-label="切换视图"><b>实物台</b><small>视图切换</small></button>
+    <button id="reset-button" aria-label="复位实验台"><span>↺</span><small>复位</small></button>
+  </section>
+
+  <button class="model-info" id="model-info" aria-label="打开模型说明">?</button>
+  <dialog id="model-dialog">
+    <button class="dialog-close" id="dialog-close" aria-label="关闭">×</button>
+    <small>MODEL NOTES</small><h2>模型说明与操作</h2>
+    <p>本实验面向初中电学。所有电路按直流稳态求解：导通元件（导线、闭合开关、电流表、完好保险丝）含 1 mΩ 教学残余电阻，使每条支路电流可计算、短路电流为有限值；电压表视为理想开路；电源忽略内阻；每个节点带有 1 GΩ 对地泄漏以保证悬空点电势有定义（物理影响可忽略）。</p>
+    <p>普通灯泡按定值电阻处理；非线性灯泡采用经验模型 R(U)，热态电阻约为冷态十倍量级，复现真实白炽灯的弯曲伏安特性，数值为教学模型而非某只具体灯泡的测量值。二极管按理想单向导通处理。电铃、电动机简化为“达到工作电流即动作”的用电器，不模拟内部磁学。短路时电流显示为有限大数值并给出警告，接入保险丝可观察熔断保护。</p>
+    <p>流向演示中，电流方向按“正电荷定向移动方向”绘制，电子流向与之相反；流动速率是夸张的示意——真实电子定向移动速率约 0.1 mm/s 量级，而电场几乎瞬间在全电路建立。电势着色按理想模型精确计算，参考点为电源负极（0 V）。水路类比用于建立直觉：水位差 ↔ 电压、水流 ↔ 电流、阀门 ↔ 电阻，边界详见资料面板“水路类比”。</p>
+    <p>操作：从元件箱点选元件放到台面；从接线柱拖出导线，或先后点击两个接线柱连线；点击元件查看并修改参数；点击开关可开合；Delete 删除选中，Esc 取消连线。电路图由实物图一键生成，布局可能与标准画法不同。</p>
+    <p class="tip">所有图形均为程序绘制，无外部素材。物理依据与理想化清单见 experiments/circuit-bench/SOURCES.md。</p>
+  </dialog>
+
+  <div class="loading" id="loading">
+    <div class="loading-circuit"><i></i><i></i><b></b><span></span></div>
+    <p id="loading-title">正在准备电学实验台</p>
+    <small id="loading-detail">INITIALIZING CIRCUIT ENGINE</small>
+    <div class="loading-error" id="loading-error" hidden>
+      <b>实验台没有成功启动</b>
+      <p>请刷新页面；如果问题持续，请把这个画面截图发给我。</p>
+    </div>
+  </div>
+
+  <script>
+    window.__circuitBenchReady = false;
+    window.__showCircuitError = function (detail) {
+      if (window.__circuitBenchReady) return;
+      var loading = document.getElementById('loading');
+      if (!loading) return;
+      loading.classList.add('failed');
+      document.getElementById('loading-title').textContent = '实验台启动失败';
+      document.getElementById('loading-detail').textContent = detail || 'STARTUP ERROR';
+      document.getElementById('loading-error').hidden = false;
+    };
+    window.addEventListener('error', function (event) { window.__showCircuitError(event.message); });
+    window.addEventListener('unhandledrejection', function () { window.__showCircuitError('UNEXPECTED STARTUP ERROR'); });
+    window.setTimeout(function () { if (!window.__circuitBenchReady) window.__showCircuitError('STARTUP TIMEOUT'); }, 8000);
+  </script>
+  <script defer src="./app.bundle.js"></script>
+</body>
+</html>
