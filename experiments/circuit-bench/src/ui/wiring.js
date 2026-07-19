@@ -1,13 +1,14 @@
 // 接线与台面交互层：拖动元件、拖线吸附、点按连线、开关切换、
-// 滑片/旋钮调节、选择与删除、放置模式、键盘操作。
+// 滑片/旋钮调节、空白处拖动平移画布、拖入垃圾桶删除、选择与键盘操作。
 
 const GRID = 20;
 const SNAP_DIST = 30;   // 接线吸附半径（bench 坐标）
 const DRAG_TOL = 5;     // 超过视为拖动（屏幕像素）
 
 export function attachWiring(svg, view, controller, hooks) {
-  let mode = null; // 'move' | 'wire' | 'slider' | 'knob'
+  let mode = null; // 'move' | 'wire' | 'slider' | 'knob' | 'pan'
   let dragComp = null, dragOffset = null, downPos = null, moved = false;
+  let panLast = null, trashShown = false;
   let wireFrom = null; // { comp, term }
   let armedTerminal = null; // 点按连线：已选中的第一个接线柱
   let solveScheduled = false;
@@ -19,7 +20,7 @@ export function attachWiring(svg, view, controller, hooks) {
   };
 
   const terminalOf = (target) => {
-    const n = target.closest?.('.terminal-hit, .terminal');
+    const n = target.closest?.('.terminal-hit, .terminal, .terminal-dot');
     if (!n) return null;
     return { comp: n.dataset.comp, term: n.dataset.term };
   };
@@ -50,6 +51,10 @@ export function attachWiring(svg, view, controller, hooks) {
     view.clearTerminalStates();
   };
 
+  const hideTrash = () => {
+    if (trashShown) { trashShown = false; hooks.onDragEnd?.(); }
+  };
+
   svg.addEventListener('pointerdown', (event) => {
     if (event.button !== undefined && event.button !== 0) return;
     const p = view.toBench(event.clientX, event.clientY);
@@ -75,26 +80,26 @@ export function attachWiring(svg, view, controller, hooks) {
       return;
     }
 
-    // 2. 滑片 / 旋钮
+    // 2. 滑片 / 旋钮 / 元件本体
     const compEl = event.target.closest?.('.comp');
     if (compEl) {
       const id = compEl.id.replace(/^comp-/, '');
       const comp = controller.getComp(id);
       if (comp) {
         const local = { x: p.x - comp.x, y: p.y - comp.y };
-        if (comp.type === 'rheostat' && local.y < 56) {
+        if (comp.type === 'rheostat' && local.y < 50) {
           mode = 'slider'; dragComp = comp;
           svg.setPointerCapture?.(event.pointerId);
           event.preventDefault();
           return;
         }
-        if (comp.type === 'student-supply' && Math.hypot(local.x - 70, local.y - 118) < 26) {
+        if (comp.type === 'student-supply' && Math.hypot(local.x - 64, local.y - 118) < 26) {
           mode = 'knob'; dragComp = comp;
           svg.setPointerCapture?.(event.pointerId);
           event.preventDefault();
           return;
         }
-        // 3. 元件本体：拖动
+        // 3. 元件本体：拖动（移动超过阈值后显示垃圾桶）
         mode = 'move';
         dragComp = comp;
         dragOffset = { x: p.x - comp.x, y: p.y - comp.y };
@@ -112,7 +117,7 @@ export function attachWiring(svg, view, controller, hooks) {
       return;
     }
 
-    // 5. 空台面：放置模式 / 取消
+    // 5. 空台面：放置模式优先，否则进入画布平移
     const placeType = hooks.getPlacementType?.();
     if (placeType) {
       const comp = controller.addComponent(placeType, snap(p.x - 60), snap(p.y - 40));
@@ -122,12 +127,21 @@ export function attachWiring(svg, view, controller, hooks) {
     }
     disarm();
     controller.select(null);
+    mode = 'pan';
+    panLast = { x: event.clientX, y: event.clientY };
+    svg.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
   });
 
   svg.addEventListener('pointermove', (event) => {
     const p = view.toBench(event.clientX, event.clientY);
     if (downPos && Math.hypot(event.clientX - downPos.x, event.clientY - downPos.y) > DRAG_TOL) moved = true;
 
+    if (mode === 'pan' && panLast) {
+      view.panBy(event.clientX - panLast.x, event.clientY - panLast.y);
+      panLast = { x: event.clientX, y: event.clientY };
+      return;
+    }
     if (mode === 'wire' && wireFrom) {
       view.updateDraft(p);
       const snapTo = nearestTerminal(p, wireFrom);
@@ -135,7 +149,9 @@ export function attachWiring(svg, view, controller, hooks) {
       return;
     }
     if (mode === 'move' && dragComp) {
+      if (moved && !trashShown) { trashShown = true; hooks.onDragStart?.(); }
       view.moveComponent(dragComp.id, snap(p.x - dragOffset.x), snap(p.y - dragOffset.y));
+      hooks.onDragHover?.(event.clientX, event.clientY);
       return;
     }
     if (mode === 'slider' && dragComp) {
@@ -155,6 +171,11 @@ export function attachWiring(svg, view, controller, hooks) {
 
   svg.addEventListener('pointerup', (event) => {
     const p = view.toBench(event.clientX, event.clientY);
+
+    if (mode === 'pan') {
+      mode = null; panLast = null;
+      return;
+    }
 
     if (mode === 'wire' && wireFrom) {
       const from = wireFrom;
@@ -183,11 +204,23 @@ export function attachWiring(svg, view, controller, hooks) {
     }
 
     if (mode === 'move' && dragComp) {
-      if (!moved) {
+      const comp = dragComp;
+      const wasDrag = moved;
+      if (trashShown) {
+        // 拖入垃圾桶则删除
+        if (hooks.onTrashDrop?.(event.clientX, event.clientY)) {
+          hideTrash();
+          controller.removeComponent(comp.id);
+          dragComp = null; mode = null;
+          return;
+        }
+        hideTrash();
+      }
+      if (!wasDrag) {
         // 点击：选中；开关类同时切换
-        controller.select('comp', dragComp.id);
-        if (dragComp.type === 'switch' || dragComp.type === 'spdt-switch') {
-          controller.toggleSwitch(dragComp.id);
+        controller.select('comp', comp.id);
+        if (comp.type === 'switch' || comp.type === 'spdt-switch') {
+          controller.toggleSwitch(comp.id);
         }
       } else {
         controller.emit('topology');
@@ -206,7 +239,8 @@ export function attachWiring(svg, view, controller, hooks) {
 
   svg.addEventListener('pointercancel', () => {
     cancelWire();
-    mode = null; dragComp = null;
+    hideTrash();
+    mode = null; dragComp = null; panLast = null;
   });
 
   // 键盘操作

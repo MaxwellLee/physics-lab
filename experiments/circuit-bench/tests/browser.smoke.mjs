@@ -100,39 +100,51 @@ try {
     check(`预设 ${p}`, st.comps > 0 && st.wires > 0, `元件${st.comps} 导线${st.wires}${st.banner ? ' 有事件横幅' : ''}`);
   }
 
-  // 7. 视图切换：电路图（先加载串联演示）
+  // 6b. 三接线柱电表（人教版）：伏安法预设中的电流表/电压表都应有 3 个接线柱
+  await evaluate('document.querySelector(\'[data-preset="good-volt-amp"]\').click()');
+  await sleep(150);
+  const meterTerms = await evaluate(`(() => {
+    const comps = window.__cb.controller.bench.components.filter(c => c.type === 'ammeter' || c.type === 'voltmeter');
+    return comps.map(c => document.querySelectorAll('.terminal-hit[data-comp="' + c.id + '"]').length);
+  })()`);
+  check('电表为三接线柱结构', meterTerms.length === 2 && meterTerms.every(n => n === 3), JSON.stringify(meterTerms));
+  const ammeterRange = await evaluate(`(() => {
+    const c = window.__cb.controller.bench.components.find(c => c.type === 'ammeter');
+    const r = window.__cb.controller.results.comps.get(c.id);
+    return r?.rangeLabel ?? null;
+  })()`);
+  check('电流表量程由接线柱决定（0–0.6 A）', ammeterRange === '0–0.6 A', String(ammeterRange));
+
+  // 7. 视图切换：实物台 ⇄ 电路图（先加载串联演示）
   await evaluate('document.querySelector(\'[data-preset="good-series"]\').click()');
   await sleep(120);
   await evaluate('document.getElementById("view-button").click()');
   await sleep(200);
-  check('电路图视图生成符号', await evaluate('!document.getElementById("schematic-svg").hidden && document.querySelectorAll("#schematic-svg .sch-sym, #schematic-svg .sch-fill").length > 0'));
-  // 水路
-  await evaluate('document.getElementById("view-button").click()');
-  await sleep(200);
-  check('水路视图显示', await evaluate('!document.getElementById("water-canvas").hidden'));
-  // 回到实物台
+  check('电路图视图生成符号', await evaluate('getComputedStyle(document.getElementById("schematic-svg")).display !== "none" && getComputedStyle(document.getElementById("bench-svg")).display === "none" && document.querySelectorAll("#schematic-svg .sch-sym, #schematic-svg .sch-fill").length > 0'));
   await evaluate('document.getElementById("view-button").click()');
   await sleep(120);
-  check('返回实物台视图', await evaluate('!document.getElementById("bench-svg").hidden'));
+  check('返回实物台视图', await evaluate('getComputedStyle(document.getElementById("bench-svg")).display !== "none" && getComputedStyle(document.getElementById("schematic-svg")).display === "none"'));
 
-  // 8. 流向演示
+  // 8. 流向演示（三态循环：关 → 电流 → 电子 → 关）
   await evaluate('document.getElementById("flow-button").click()');
-  await sleep(200);
-  check('流向层生成动画元素', await evaluate('document.querySelectorAll("#bench-svg .flow-layer > *").length > 0'));
-  await evaluate('document.getElementById("flow-button").click()'); // electron
-  await sleep(150);
-  check('电子流向模式', await evaluate('document.querySelectorAll("#bench-svg .flow-dot").length > 0'));
+  await sleep(250);
+  check('电流模式生成流动箭头', await evaluate('document.querySelectorAll("#bench-svg .flow-arrow").length > 0'));
   await evaluate('document.getElementById("flow-button").click()');
-  await evaluate('document.getElementById("flow-button").click()'); // 回到 off
+  await sleep(250);
+  check('电子模式生成电子点', await evaluate('document.querySelectorAll("#bench-svg .flow-dot").length > 0 && document.querySelectorAll("#bench-svg .flow-arrow").length === 0'));
+  await evaluate('document.getElementById("flow-button").click()');
   await sleep(120);
   check('流向关闭后清空', await evaluate('document.querySelectorAll("#bench-svg .flow-layer > *").length === 0'));
 
-  // 9. 电势模式
-  await evaluate('document.getElementById("potential-button").click()');
-  await sleep(200);
-  check('电势图例显示且导线着色', await evaluate('!document.getElementById("potential-legend").hidden && document.querySelectorAll("#bench-svg .pot-wire").length > 0'));
-  await evaluate('document.getElementById("potential-button").click()');
-  await sleep(120);
+  // 9. 缩放与平移
+  const vb0 = await evaluate('document.getElementById("bench-svg").getAttribute("viewBox")');
+  await evaluate('document.getElementById("zoom-in").click()');
+  await sleep(80);
+  const vb1 = await evaluate('document.getElementById("bench-svg").getAttribute("viewBox")');
+  check('放大按钮缩小视野宽度', parseFloat(vb1.split(' ')[2]) < parseFloat(vb0.split(' ')[2]), `${vb0} → ${vb1}`);
+  await evaluate('document.getElementById("zoom-reset").click()');
+  await sleep(80);
+  check('重置视图恢复初始视野', await evaluate('document.getElementById("bench-svg").getAttribute("viewBox")') === vb0);
 
   // 10. 面板折叠/展开
   await evaluate('document.getElementById("library-close").click()');
@@ -234,13 +246,37 @@ try {
   await sleep(120);
   check('Delete 键删除选中导线', await evaluate('window.__cb.controller.bench.wires.length') === 1);
 
-  // 自由搭建电路 → 电路图
+  // 自由搭建电路 → 电路图（两态切换）
   await evaluate('document.getElementById("view-button").click()');
   await sleep(200);
   check('自由搭建可生成电路图', await evaluate('document.querySelectorAll("#schematic-svg .sch-sym, #schematic-svg .sch-fill").length >= 2'));
   await evaluate('document.getElementById("view-button").click()');
-  await evaluate('document.getElementById("view-button").click()');
   await sleep(120);
+
+  // 底部参数条：选中元件弹出，含滑块
+  await evaluate(`window.__cb.controller.select('comp', '${resistor.id}')`);
+  await sleep(120);
+  check('选中元件后底部参数条弹出', await evaluate('!document.getElementById("param-bar").hidden && document.querySelectorAll("#param-bar input[type=range]").length >= 1'));
+  const paramText = await evaluate('document.getElementById("param-bar").textContent');
+  check('参数条含阻值标签', paramText.includes('阻值'), paramText.slice(0, 40));
+
+  // 空白处拖动 = 平移画布
+  const vbBefore = await evaluate('document.getElementById("bench-svg").getAttribute("viewBox")');
+  await dragTo(1400, 760, 1520, 810);
+  await sleep(100);
+  const vbAfter = await evaluate('document.getElementById("bench-svg").getAttribute("viewBox")');
+  check('拖动空白处平移画布', vbBefore !== vbAfter, `${vbBefore} → ${vbAfter}`);
+  await evaluate('document.getElementById("zoom-reset").click()');
+  await sleep(80);
+
+  // 拖入垃圾桶删除元件（连带导线）
+  const rPos = await evaluate(`(() => { const r = document.getElementById('comp-${resistor.id}').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
+  const trashPos = await evaluate(`(() => { const r = document.getElementById('trash-bin').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
+  await dragTo(rPos.x, rPos.y, trashPos.x, trashPos.y);
+  await sleep(150);
+  check('拖入垃圾桶删除元件', await evaluate('window.__cb.controller.bench.components.length') === 1
+    && await evaluate('window.__cb.controller.bench.wires.length') === 0);
+  check('垃圾桶已隐藏', await evaluate('!document.getElementById("trash-bin").classList.contains("show")'));
 
   // 15. 控制台错误
   check('浏览器控制台无错误', consoleErrors.length === 0, consoleErrors.slice(0, 3).join(' | '));

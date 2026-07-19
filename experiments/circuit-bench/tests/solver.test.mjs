@@ -3,7 +3,7 @@
 // 运行：node experiments/circuit-bench/tests/solver.test.mjs
 
 import assert from 'node:assert/strict';
-import { solveBench, reduceForWater } from '../src/physics/circuit.js';
+import { solveBench } from '../src/physics/circuit.js';
 import { nlBulbColdR, isSource } from '../src/physics/components.js';
 import { PRESETS, instantiatePreset, findPreset } from '../data.js';
 
@@ -25,10 +25,10 @@ const test = (name, fn) => tests.push([name, fn]);
 test('T1 单回路欧姆定律与能量守恒', () => {
   const s = comp('student-supply', { voltage: 3 });
   const r = comp('resistor', { resistance: 10 });
-  const a = comp('ammeter', { range: 0.6 });
+  const a = comp('ammeter', {});
   const bench = {
     components: [s, r, a],
-    wires: [wire(s.id, 'pos', a.id, 'plus'), wire(a.id, 'minus', r.id, 'a'), wire(r.id, 'b', s.id, 'neg')]
+    wires: [wire(s.id, 'pos', a.id, 'low'), wire(a.id, 'minus', r.id, 'a'), wire(r.id, 'b', s.id, 'neg')]
   };
   const out = solveBench(bench);
   assert.ok(out.ok);
@@ -195,10 +195,10 @@ test('T10 发光二极管点亮', () => {
 test('T11 电流表反接读数为负', () => {
   const s = comp('student-supply', { voltage: 3 });
   const r = comp('resistor', { resistance: 10 });
-  const a = comp('ammeter', { range: 0.6 });
+  const a = comp('ammeter', {});
   const bench = {
     components: [s, r, a],
-    wires: [wire(s.id, 'pos', a.id, 'minus'), wire(a.id, 'plus', r.id, 'a'), wire(r.id, 'b', s.id, 'neg')]
+    wires: [wire(s.id, 'pos', a.id, 'minus'), wire(a.id, 'low', r.id, 'a'), wire(r.id, 'b', s.id, 'neg')]
   };
   const out = solveBench(bench);
   near(out.comps.get(a.id).reading, -0.3, 0.01, '反接读数应为负');
@@ -209,12 +209,12 @@ test('T12 电压表测断开开关两端', () => {
   const s = comp('student-supply', { voltage: 3 });
   const sw = comp('switch', { closed: false });
   const r = comp('resistor', { resistance: 10 });
-  const vm = comp('voltmeter', { range: 3 });
+  const vm = comp('voltmeter', {});
   const bench = {
     components: [s, sw, r, vm],
     wires: [
       wire(s.id, 'pos', sw.id, 'a'), wire(sw.id, 'b', r.id, 'a'), wire(r.id, 'b', s.id, 'neg'),
-      wire(vm.id, 'plus', sw.id, 'a'), wire(vm.id, 'minus', sw.id, 'b')
+      wire(vm.id, 'low', sw.id, 'a'), wire(vm.id, 'minus', sw.id, 'b')
     ]
   };
   const out = solveBench(bench);
@@ -225,11 +225,11 @@ test('T12 电压表测断开开关两端', () => {
 // T13 电压表串入电路：电路几乎不通，电压表读数≈电源电压
 test('T13 电压表串联的错误接法', () => {
   const s = comp('student-supply', { voltage: 3 });
-  const vm = comp('voltmeter', { range: 3 });
+  const vm = comp('voltmeter', {});
   const b = comp('bulb', { resistance: 10, ratedP: 1 });
   const bench = {
     components: [s, vm, b],
-    wires: [wire(s.id, 'pos', vm.id, 'plus'), wire(vm.id, 'minus', b.id, 'a'), wire(b.id, 'b', s.id, 'neg')]
+    wires: [wire(s.id, 'pos', vm.id, 'low'), wire(vm.id, 'minus', b.id, 'a'), wire(b.id, 'b', s.id, 'neg')]
   };
   const out = solveBench(bench);
   assert.ok(Math.abs(out.comps.get(b.id).I) < 1e-6, '灯泡应几乎无电流');
@@ -246,58 +246,6 @@ test('T14 滑动变阻器分阻', () => {
   };
   const out = solveBench(bench);
   near(out.comps.get(rh.id).Iac, 0.12, 0.01, 'a-c 支路电流 3/25');
-});
-
-// T15 水路类比拓扑约化：串联 / 并联 / 含电流表的串联
-test('T15 水路类比拓扑约化', () => {
-  const series = reduceForWater({
-    components: [
-      { id: 's', type: 'student-supply', params: { voltage: 3 } },
-      { id: 'b1', type: 'bulb', params: {} },
-      { id: 'b2', type: 'bulb', params: {} }
-    ],
-    wires: [
-      { id: 'w1', a: { comp: 's', term: 'pos' }, b: { comp: 'b1', term: 'a' } },
-      { id: 'w2', a: { comp: 'b1', term: 'b' }, b: { comp: 'b2', term: 'a' } },
-      { id: 'w3', a: { comp: 'b2', term: 'b' }, b: { comp: 's', term: 'neg' } }
-    ]
-  });
-  assert.equal(series?.mode, 'series', '应识别为串联');
-  const parallel = reduceForWater({
-    components: [
-      { id: 's', type: 'student-supply', params: { voltage: 3 } },
-      { id: 'b1', type: 'bulb', params: {} },
-      { id: 'b2', type: 'bulb', params: {} }
-    ],
-    wires: [
-      { id: 'w1', a: { comp: 's', term: 'pos' }, b: { comp: 'b1', term: 'a' } },
-      { id: 'w2', a: { comp: 's', term: 'pos' }, b: { comp: 'b2', term: 'a' } },
-      { id: 'w3', a: { comp: 'b1', term: 'b' }, b: { comp: 's', term: 'neg' } },
-      { id: 'w4', a: { comp: 'b2', term: 'b' }, b: { comp: 's', term: 'neg' } }
-    ]
-  });
-  assert.equal(parallel?.mode, 'parallel', '应识别为并联');
-  const withMeter = reduceForWater({
-    components: [
-      { id: 's', type: 'student-supply', params: { voltage: 3 } },
-      { id: 'a', type: 'ammeter', params: {} },
-      { id: 'r', type: 'resistor', params: {} }
-    ],
-    wires: [
-      { id: 'w1', a: { comp: 's', term: 'pos' }, b: { comp: 'a', term: 'plus' } },
-      { id: 'w2', a: { comp: 'a', term: 'minus' }, b: { comp: 'r', term: 'a' } },
-      { id: 'w3', a: { comp: 'r', term: 'b' }, b: { comp: 's', term: 'neg' } }
-    ]
-  });
-  assert.equal(withMeter?.mode, 'series', '含电流表的串联应可约化');
-  const messy = reduceForWater({
-    components: [
-      { id: 's1', type: 'student-supply', params: { voltage: 3 } },
-      { id: 's2', type: 'battery-pack', params: { cells: 2 } }
-    ],
-    wires: []
-  });
-  assert.equal(messy, null, '双电源不可约化');
 });
 
 // T16 两个不同电压电源并联：环流巨大 → 短路事件（安全演示）

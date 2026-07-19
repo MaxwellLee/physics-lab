@@ -10,7 +10,7 @@ const $ = id => document.getElementById(id);
 export class Panels {
   constructor(controller, hooks) {
     this.controller = controller;
-    this.hooks = hooks; // { onPlacementArmed(type|null), onRedrawComponent(id) }
+    this.hooks = hooks; // { onPlacementArmed(type|null), onLayoutChange() }
     this.placementType = null;
     this.selDetailed = false;
     this.conceptKey = null;
@@ -118,7 +118,7 @@ export class Panels {
     const comp = sel?.kind === 'comp' ? this.controller.getComp(sel.id) : null;
     $('selected-empty').hidden = !!comp;
     $('selected-body').hidden = !comp;
-    if (!comp) return;
+    if (!comp) { $('param-bar').hidden = true; return; }
     const def = DEFS[comp.type];
     const cat = CATALOG[comp.type];
     $('sel-name').textContent = def.label;
@@ -129,39 +129,51 @@ export class Panels {
     $('sel-detail').innerHTML = cat?.detail ? `<section><p>${cat.detail}</p></section>` : '';
     $('sel-brief-btn').classList.toggle('active', !this.selDetailed);
     $('sel-detail-btn').classList.toggle('active', this.selDetailed);
-    this.renderParams(comp);
+    this.renderParamBar(comp);
     this.renderActions(comp);
     this.renderSelectedReadings();
   }
 
-  renderParams(comp) {
-    const wrap = $('sel-params');
-    wrap.replaceChildren();
+  // —— 底部参数条：选中元件的可调参数，紧贴底部弹出 ——
+  renderParamBar(comp) {
+    const bar = $('param-bar');
+    bar.replaceChildren();
     const def = DEFS[comp.type];
-    for (const [key, cfg] of Object.entries(def.params)) {
+    const head = document.createElement('b');
+    head.className = 'param-title';
+    head.textContent = def.label;
+    bar.appendChild(head);
+    const entries = Object.entries(def.params);
+    if (!entries.length) {
+      const note = document.createElement('span');
+      note.className = 'param-note';
+      note.textContent = def.kind === 'meter' ? '量程由所接接线柱决定' : '此元件无可调参数';
+      bar.appendChild(note);
+    }
+    for (const [key, cfg] of entries) {
       if (comp.type === 'wire-board' && key === 'specimen') {
-        wrap.appendChild(this.selectRow(comp, key, cfg.label,
+        bar.appendChild(this.selectRow(comp, key, cfg.label,
           WIRE_SPECIMENS.map(s => ({ value: s.id, label: `${s.label} ≈${s.R} Ω` })), comp.params.specimen));
         continue;
       }
       if (cfg.type === 'bool') {
-        const label = document.createElement('label');
-        label.className = 'param-check';
+        const lbl = document.createElement('label');
+        lbl.className = 'param-check';
         const input = document.createElement('input');
         input.type = 'checkbox';
         input.checked = !!comp.params[key];
         input.addEventListener('change', () => this.controller.setParam(comp.id, key, input.checked, { redraw: false }));
-        label.appendChild(input);
-        label.appendChild(document.createTextNode(cfg.label));
-        wrap.appendChild(label);
+        lbl.appendChild(input);
+        lbl.appendChild(document.createTextNode(cfg.label));
+        bar.appendChild(lbl);
         continue;
       }
       if (cfg.options) {
-        wrap.appendChild(this.selectRow(comp, key, cfg.label,
+        bar.appendChild(this.selectRow(comp, key, cfg.label,
           cfg.options.map(o => ({ value: o, label: `${o} ${cfg.unit ?? ''}` })), comp.params[key]));
         continue;
       }
-      // range
+      // range 滑块
       const row = document.createElement('div');
       row.className = 'param-row';
       const name = document.createElement('span');
@@ -175,11 +187,19 @@ export class Panels {
       input.addEventListener('input', () => {
         comp.params[key] = Number(input.value);
         out.textContent = `${input.value} ${cfg.unit ?? ''}`;
-        this.controller.setParam(comp.id, key, Number(input.value), { redraw: false });
+        // 电池节数等结构性参数需要重画元件本体
+        this.controller.setParam(comp.id, key, Number(input.value), { redraw: key === 'cells' });
       });
       row.append(name, input, out);
-      wrap.appendChild(row);
+      bar.appendChild(row);
     }
+    const close = document.createElement('button');
+    close.className = 'param-close';
+    close.setAttribute('aria-label', '收起参数条');
+    close.textContent = '×';
+    close.addEventListener('click', () => this.controller.select(null));
+    bar.appendChild(close);
+    bar.hidden = false;
   }
 
   selectRow(comp, key, labelText, options, current) {
@@ -235,7 +255,7 @@ export class Panels {
     const def = DEFS[comp.type];
     if (def.kind === 'meter') {
       items.push(['读数', comp.type === 'voltmeter' ? fmtV(r.reading ?? 0) : fmtA(r.reading ?? 0), (r.reading ?? 0) < 0]);
-      items.push(['量程', `${comp.params.range} ${comp.type === 'voltmeter' ? 'V' : 'A'}`, false]);
+      items.push(['量程', r.rangeLabel ?? '未接线', false]);
     } else {
       items.push(['电压 U', fmtV(r.U ?? 0), false]);
       items.push(['电流 I', fmtA(r.I ?? 0), (r.I ?? 0) < -1e-9]);
@@ -260,7 +280,11 @@ export class Panels {
       if (!r) continue;
       if (def.kind === 'meter') {
         const unit = comp.type === 'voltmeter';
-        rows.push({ name: def.label, value: unit ? fmtV(r.reading ?? 0) : fmtA(r.reading ?? 0), neg: (r.reading ?? 0) < 0, note: (r.reading ?? 0) < 0 ? '接线柱接反（指针反打）' : (r.overrange ? '超过量程！' : '') });
+        const notes = [];
+        if (r.rangeLabel) notes.push(`量程 ${r.rangeLabel}`);
+        if ((r.reading ?? 0) < 0) notes.push('接线柱接反（指针反打）');
+        else if (r.overrange) notes.push('超过量程！');
+        rows.push({ name: def.label, value: unit ? fmtV(r.reading ?? 0) : fmtA(r.reading ?? 0), neg: (r.reading ?? 0) < 0, note: notes.join(' · ') });
       } else if (def.kind === 'source') {
         rows.push({ name: def.label, value: `${fmtV(r.U)} · ${fmtA(r.I)}`, neg: false, note: '电压 · 输出电流' });
       }
@@ -374,21 +398,26 @@ export class Panels {
 
   // —— 面板折叠 ——
   attachCollapse() {
+    const changed = () => this.hooks.onLayoutChange?.();
     $('library-close').addEventListener('click', () => {
       $('library-panel').classList.add('collapsed');
       $('library-reopen').hidden = false;
+      changed();
     });
     $('library-reopen').addEventListener('click', () => {
       $('library-panel').classList.remove('collapsed');
       $('library-reopen').hidden = true;
+      changed();
     });
     $('inspector-close').addEventListener('click', () => {
       $('inspector-panel').classList.add('collapsed');
       $('inspector-reopen').hidden = false;
+      changed();
     });
     $('inspector-reopen').addEventListener('click', () => {
       $('inspector-panel').classList.remove('collapsed');
       $('inspector-reopen').hidden = true;
+      changed();
     });
   }
 }

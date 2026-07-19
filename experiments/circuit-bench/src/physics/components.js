@@ -122,29 +122,39 @@ export const DEFS = {
     }
   },
 
+  // 三接线柱电表（人教版样式）：公共负接线柱 minus + 两个量程正接线柱 low/high。
+  // 量程由学生实际接线的接线柱决定；测量逻辑在 circuit.js 中（需要知道哪些端子被接线）。
   ammeter: {
-    label: '电流表', kind: 'meter', terminals: ['plus', 'minus'],
-    params: { range: { label: '量程', options: [0.6, 3], def: 0.6, unit: 'A' } },
-    stamp(ctx, comp) { ctx.resistor(ctx.node('plus'), ctx.node('minus'), WIRE_R); },
-    measure(comp, v, out) {
-      out.reading = (v[comp.nodes.plus] - v[comp.nodes.minus]) / WIRE_R;
+    label: '电流表', kind: 'meter', terminals: ['minus', 'low', 'high'],
+    termLabels: { minus: '−', low: '0.6', high: '3' },
+    ranges: { low: 0.6, high: 3 }, // A
+    params: {},
+    stamp(ctx) {
+      // 理想电流表：内阻取教学残余电阻
+      ctx.resistor(ctx.node('low'), ctx.node('minus'), WIRE_R);
+      ctx.resistor(ctx.node('high'), ctx.node('minus'), WIRE_R);
     }
   },
   galvanometer: {
-    label: '灵敏电流计', kind: 'meter', terminals: ['plus', 'minus'],
-    params: { range: { label: '量程', options: [0.3, 3], def: 0.3, unit: 'A' } },
+    label: '灵敏电流计', kind: 'meter', terminals: ['minus', 'low', 'high'],
+    termLabels: { minus: '−', low: 'G0', high: 'G1' },
+    ranges: { low: 0.03, high: 0.3 }, // A（教学量程，见 SOURCES.md）
     centerZero: true,
-    stamp(ctx, comp) { ctx.resistor(ctx.node('plus'), ctx.node('minus'), WIRE_R); },
-    measure(comp, v, out) {
-      out.reading = (v[comp.nodes.plus] - v[comp.nodes.minus]) / WIRE_R;
+    params: {},
+    stamp(ctx) {
+      ctx.resistor(ctx.node('low'), ctx.node('minus'), WIRE_R);
+      ctx.resistor(ctx.node('high'), ctx.node('minus'), WIRE_R);
     }
   },
   voltmeter: {
-    label: '电压表', kind: 'meter', terminals: ['plus', 'minus'],
-    params: { range: { label: '量程', options: [3, 15], def: 3, unit: 'V' } },
-    stamp() { /* 理想开路，不印记 */ },
-    measure(comp, v, out) {
-      out.reading = v[comp.nodes.plus] - v[comp.nodes.minus];
+    label: '电压表', kind: 'meter', terminals: ['minus', 'low', 'high'],
+    termLabels: { minus: '−', low: '3', high: '15' },
+    ranges: { low: 3, high: 15 }, // V
+    params: {},
+    stamp(ctx) {
+      // 理想电压表：视为开路（1 GΩ 模型内阻，使串入电路时电路几乎不通）
+      ctx.resistor(ctx.node('low'), ctx.node('minus'), OPEN_R);
+      ctx.resistor(ctx.node('high'), ctx.node('minus'), OPEN_R);
     }
   },
 

@@ -46,7 +46,7 @@ try {
   check('移动端面板初始折叠', await evaluate('document.getElementById("library-panel").classList.contains("collapsed") && document.getElementById("inspector-panel").classList.contains("collapsed")'));
   check('折叠恢复按钮可见', await evaluate('!document.getElementById("library-reopen").hidden && !document.getElementById("inspector-reopen").hidden'));
   check('运输条在视口内', await evaluate(`(() => {
-    const r = document.getElementById('play-button').getBoundingClientRect();
+    const r = document.getElementById('flow-button').getBoundingClientRect();
     return r.left >= 0 && r.right <= 390 && r.top >= 0 && r.bottom <= 844;
   })()`));
   check('顶栏在视口内', await evaluate(`(() => {

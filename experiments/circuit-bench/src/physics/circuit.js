@@ -45,6 +45,13 @@ export function solveBench(bench) {
   }
   if (ground < 0) ground = 0;
 
+  // 实际被导线连接的端子集合（电表量程由接线柱决定）
+  const wired = new Set();
+  for (const w of bench.wires) {
+    wired.add(`${w.a.comp}:${w.a.term}`);
+    wired.add(`${w.b.comp}:${w.b.term}`);
+  }
+
   // 3. 跨迭代状态：二极管导通态、非线性灯泡当前电阻
   const state = {
     diodeOn: new Map(),
@@ -183,16 +190,33 @@ export function solveBench(bench) {
       out.P = (v[nv.a] - v[nv.c]) * iac + (v[nv.b] - v[nv.c]) * ibc;
       registerShort(cs.id, iac); registerShort(cs.id, ibc);
     } else if (cs.def.kind === 'meter') {
-      cs.def.measure?.({ nodes: nv, params: cs.params }, v, out);
-      out.I = cs.type === 'voltmeter' ? 0 : out.reading;
-      out.U = cs.type === 'voltmeter' ? out.reading : (v[nv.plus] - v[nv.minus]);
-      out.P = out.U * out.I;
-      const range = cs.params.range ?? 1;
+      // 三接线柱电表：量程由实际接线的正接线柱决定（low/high 都接时按 low 处理）
+      const lowUsed = wired.has(`${cs.id}:low`);
+      const highUsed = wired.has(`${cs.id}:high`);
+      const t = lowUsed ? 'low' : (highUsed ? 'high' : 'low');
+      const range = cs.def.ranges[t];
+      out.range = range;
+      out.rangeLabel = cs.type === 'galvanometer'
+        ? (t === 'low' ? 'G0 挡' : 'G1 挡')
+        : `0–${cs.def.termLabels[t]} ${cs.type === 'voltmeter' ? 'V' : 'A'}`;
+      if (cs.type === 'voltmeter') {
+        out.reading = v[nv[t]] - v[nv.minus];
+        out.I = 0;
+        out.U = out.reading;
+        out.P = 0;
+      } else {
+        const iLow = (v[nv.low] - v[nv.minus]) / WIRE_R;
+        const iHigh = (v[nv.high] - v[nv.minus]) / WIRE_R;
+        out.reading = (lowUsed && highUsed) ? iLow + iHigh : (t === 'low' ? iLow : iHigh);
+        out.I = out.reading;
+        out.U = v[nv[t]] - v[nv.minus];
+        out.P = out.U * out.I;
+        registerShort(cs.id, out.reading ?? 0);
+      }
       if (Math.abs(out.reading ?? 0) > range) {
         events.push({ type: 'overrange', id: cs.id, reading: out.reading, range, meter: cs.type });
         out.overrange = true;
       }
-      if (cs.type !== 'voltmeter') registerShort(cs.id, out.reading ?? 0);
     } else if (cs.type === 'spdt-switch') {
       const to = cs.params.position === 'y' ? 'y' : 'x';
       out.I = (v[nv.com] - v[nv[to]]) / WIRE_R;
@@ -260,7 +284,6 @@ function effectiveResistance(cs, state, blownNow) {
     case 'diode': case 'led': return state.diodeOn.get(cs.id) ? WIRE_R : null;
     case 'fuse': return blownNow.has(cs.id) ? null : WIRE_R;
     case 'switch': return cs.params.closed ? WIRE_R : null;
-    case 'ammeter': case 'galvanometer': return WIRE_R;
     case 'bell': case 'motor': return cs.params.resistance;
     default: return null;
   }
@@ -273,68 +296,4 @@ function maxAbsDiff(a, b) {
     if (d > m) m = d;
   }
   return m;
-}
-
-// —— 供水路类比使用的拓扑约化 ——
-// 若电路可约化为「一个电源 + 一组纯串联或纯并联负载（≤3）」，返回结构描述，否则 null。
-// 负载：电阻/灯泡/电阻箱/电阻丝板/电铃/电动机；开关须闭合；电流表视为导线；电压表忽略。
-export function reduceForWater(bench) {
-  const comps = bench.components.filter(c => DEFS[c.type]);
-  const sources = comps.filter(c => DEFS[c.type].kind === 'source');
-  if (sources.length !== 1) return null;
-  const source = sources[0];
-  const loadTypes = new Set(['resistor', 'resistance-box', 'wire-board', 'bulb', 'bulb-nl', 'bell', 'motor']);
-  const loads = comps.filter(c => loadTypes.has(c.type));
-  if (loads.length < 1 || loads.length > 3) return null;
-  const pass = new Set(['ammeter', 'galvanometer', 'switch', 'fuse']); // 视为导通的元件（开关须闭合、保险丝须完好）
-  const ignored = new Set(['voltmeter']); // 理想开路，不影响拓扑
-  const others = comps.filter(c => c.id !== source.id && !loadTypes.has(c.type) && !pass.has(c.type) && !ignored.has(c.type));
-  if (others.length) return null;
-  if (comps.some(c => (c.type === 'switch' && !c.params.closed) || (c.type === 'fuse' && c.blown))) return null;
-
-  // 建端子图：导线 + 导通元件 合并等势区；负载与电源为支路边
-  const parent = new Map();
-  const find = (x) => { while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); } return x; };
-  const union = (a, b) => { parent.set(find(a), find(b)); };
-  const key = (c, t) => `${c}:${t}`;
-  const ensure = (x) => { if (!parent.has(x)) parent.set(x, x); };
-  for (const c of comps) for (const t of DEFS[c.type].terminals) ensure(key(c.id, t));
-  for (const w of bench.wires) {
-    const a = key(w.a.comp, w.a.term), b = key(w.b.comp, w.b.term);
-    if (parent.has(a) && parent.has(b)) union(a, b);
-  }
-  for (const c of comps) {
-    if (c.type === 'ammeter' || c.type === 'galvanometer') union(key(c.id, 'plus'), key(c.id, 'minus'));
-    if (c.type === 'switch' && c.params.closed) union(key(c.id, 'a'), key(c.id, 'b'));
-    if (c.type === 'fuse' && !c.blown) union(key(c.id, 'a'), key(c.id, 'b'));
-  }
-  const sp = find(key(source.id, 'pos')), sn = find(key(source.id, 'neg'));
-
-  // 每个负载必须直接跨接在两个等势区之间；收集 (from,to) 边
-  const edges = loads.map(l => ({ id: l.id, type: l.type, from: find(key(l.id, 'a')), to: find(key(l.id, 'b')) }));
-  // 串联判定优先（单负载电路同属两种形态，教学上按单回路处理）：
-  // 把负载当作边，等势区当作点，存在一条经过全部负载、从 sp 到 sn 且不重复的链
-  if (isSeriesChain(edges, sp, sn, loads.length)) {
-    return { mode: 'series', sourceId: source.id, loadIds: loads.map(l => l.id) };
-  }
-  // 并联判定：所有负载都跨接在 (sp, sn) 之间
-  const parallel = edges.every(e =>
-    (e.from === sp && e.to === sn) || (e.from === sn && e.to === sp));
-  if (parallel) {
-    return { mode: 'parallel', sourceId: source.id, loadIds: loads.map(l => l.id) };
-  }
-  return null;
-}
-
-function isSeriesChain(edges, sp, sn, count) {
-  // 从 sp 出发，每步沿一条负载边走到另一端；要求恰好经过 count 条边后到达 sn，且不重复
-  let node = sp;
-  const used = new Set();
-  for (let step = 0; step < count; step++) {
-    const next = edges.find(e => !used.has(e.id) && (e.from === node || e.to === node));
-    if (!next) return false;
-    used.add(next.id);
-    node = next.from === node ? next.to : next.from;
-  }
-  return node === sn && used.size === count;
 }
