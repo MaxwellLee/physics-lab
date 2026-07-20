@@ -22,6 +22,7 @@ function boot() {
   const controller = new Controller();
   const view = new BenchView($('bench-svg'));
   const flow = new FlowView(view.flowLayer);
+  const schFlow = new FlowView(null); // 电路图每次全量重画，renderSch 时再 setLayer 指向新图层
 
   // —— 事件横幅：短路 / 熔断 / 超功率 / 超量程 / 求解失败 ——
   const banner = $('event-banner');
@@ -73,13 +74,20 @@ function boot() {
     const Rraw = rp.classList.contains('collapsed') ? W - 64 : rp.getBoundingClientRect().left - 10;
     return { L, T: 84, R: Math.max(Rraw, L + 240), B: H - 100 };
   }
+  // 电路图重渲染 + 流向层重建（符号每次全量重画，流向层指向新图层）
+  function renderSch() {
+    const { flowLinks, flowLayer } = renderSchematic($('schematic-svg'), controller.bench, view, stageViewport(), controller.results);
+    schFlow.setLayer(flowLayer);
+    schFlow.buildFromLinks(ui.flowMode, flowLinks);
+  }
   function applyView() {
     const v = ui.view;
     $('bench-svg').toggleAttribute('hidden', v !== 'bench');
     $('schematic-svg').toggleAttribute('hidden', v !== 'schematic');
     $('schematic-note').hidden = v !== 'schematic';
     $('view-status').textContent = { bench: '实物台', schematic: '电路图' }[v];
-    if (v === 'schematic') renderSchematic($('schematic-svg'), controller.bench, view, stageViewport());
+    if (v === 'schematic') renderSch();
+    else flow.rebuild(ui.flowMode, controller.results, view, controller.bench); // 切回实物台时恢复流向动画
   }
 
   // —— 控制层事件 → 渲染层 ——
@@ -99,7 +107,7 @@ function boot() {
       view.updateDynamic(ctrl.results, ctrl.bench);
       updateBanner(ctrl.results);
       flow.rebuild(ui.flowMode, ctrl.results, view, ctrl.bench);
-      if (ui.view === 'schematic') renderSchematic($('schematic-svg'), ctrl.bench, view, stageViewport());
+      if (ui.view === 'schematic') renderSch();
     }
   });
 
@@ -132,13 +140,13 @@ function boot() {
     // 面板折叠/展开会改变可视区，电路图需要重新取景（等折叠动画结束后再算）
     onLayoutChange() {
       if (ui.view !== 'schematic') return;
-      setTimeout(() => renderSchematic($('schematic-svg'), controller.bench, view, stageViewport()), 340);
+      setTimeout(renderSch, 340);
     }
   });
 
   // 窗口尺寸变化时电路图重新取景
   addEventListener('resize', () => {
-    if (ui.view === 'schematic') renderSchematic($('schematic-svg'), controller.bench, view, stageViewport());
+    if (ui.view === 'schematic') renderSch();
   });
 
   // 小屏设备：两个面板初始折叠，先露出台面（可用「元件」「资料」按钮展开）
@@ -152,11 +160,8 @@ function boot() {
   // —— 底部运输条 ——
   attachTransport(ui, {
     onFlowChange(mode) {
-      flow.rebuild(mode, controller.results, view, controller.bench);
-      if (mode !== 'off' && ui.view !== 'bench') {
-        $('hint-bar').textContent = '流向演示显示在实物台视图中';
-        setTimeout(() => { if (!panels.placementType) $('hint-bar').textContent = defaultHint; }, 2200);
-      }
+      if (ui.view === 'schematic') renderSch();
+      else flow.rebuild(mode, controller.results, view, controller.bench);
     },
     onViewChange() { applyView(); },
     onReset() {
@@ -185,8 +190,9 @@ function boot() {
   function tick(now) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
-    if (!document.hidden && ui.view === 'bench' && ui.flowMode !== 'off') {
-      flow.frame(dt, true, reducedMotion());
+    if (!document.hidden && ui.flowMode !== 'off') {
+      if (ui.view === 'bench') flow.frame(dt, true, reducedMotion());
+      else schFlow.frame(dt, true, reducedMotion());
     }
     requestAnimationFrame(tick);
   }
@@ -199,7 +205,7 @@ function boot() {
   applyView();
 
   // —— 就绪闸门 ——
-  window.__cb = { controller, view, ui, flow }; // 调试与自动化测试句柄
+  window.__cb = { controller, view, ui, flow, schFlow }; // 调试与自动化测试句柄
   window.__circuitBenchReady = true;
   const loading = $('loading');
   loading.classList.add('done');

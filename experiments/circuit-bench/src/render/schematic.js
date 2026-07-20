@@ -8,13 +8,26 @@ import { DEFS } from '../physics/components.js';
 const GRID = 60;
 const HL = 40; // 符号半长
 
-export function renderSchematic(svg, bench, view, viewport) {
+export function renderSchematic(svg, bench, view, viewport, results) {
   svg.setAttribute('viewBox', '0 0 1600 1000');
   svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
   svg.replaceChildren();
   if (!bench.components.length) {
     text(svg, '台面上还没有元件', { x: 800, y: 500, class: 'sch-label', 'font-size': 18, 'text-anchor': 'middle' });
-    return;
+    return { flowLinks: [], flowLayer: null };
+  }
+
+  // 各端子「流入元件」的电流：求解结果的导线电流 I 正方向为 a→b，则 a 端流出（−I）、b 端流入（+I）。
+  // 流向动画以此为每段引线定向定大小（KCL：同一等势组各端子流入之和为 0）。
+  const termIn = new Map();
+  if (results?.ok && results.wires) {
+    for (const w of bench.wires) {
+      const r = results.wires.get(w.id);
+      if (!r) continue;
+      const ka = `${w.a.comp}:${w.a.term}`, kb = `${w.b.comp}:${w.b.term}`;
+      termIn.set(ka, (termIn.get(ka) ?? 0) - r.I);
+      termIn.set(kb, (termIn.get(kb) ?? 0) + r.I);
+    }
   }
 
   // 1. 用导线把端子合并为等势组
@@ -70,12 +83,16 @@ export function renderSchematic(svg, bench, view, viewport) {
   const placedM = []; // 已放置符号的中点，用于并联分支错位
   const placedBB = []; // 已放置符号的包围盒，用于走线避让（导线不能穿过符号）
   const placements = []; // 两端元件的引线归属，绘制前统一校正
+  const drawnSegs = []; // 已绘导线线段（供标签避让检测）
+  const labels = [];    // 已绘标签（元件名/参数），绘制后统一做导线避让
 
   const connect = (P, ST, horizontal) => {
     const d = horizontal
       ? `M ${P.x} ${P.y} L ${P.x} ${ST.y} L ${ST.x} ${ST.y}`
       : `M ${P.x} ${P.y} L ${ST.x} ${P.y} L ${ST.x} ${ST.y}`;
     el('path', { d, class: 'sch-wire' }, wireLayer);
+    const corner = horizontal ? { x: P.x, y: ST.y } : { x: ST.x, y: P.y };
+    drawnSegs.push([P, corner], [corner, ST]);
   };
   // 轴对齐线段是否穿过符号包围盒内部（端点所在的两个符号除外）
   const segHitsBB = (p, q, bb) => {
@@ -87,15 +104,24 @@ export function renderSchematic(svg, bench, view, viewport) {
   const bump = (P) => { const g = [...groups.values()].find(v => v.x === P.x && v.y === P.y); if (g) g.count++; };
   // 连线请求先收集，最后再统一绘制：
   // 只有 2 个连接点的等势组（纯串联过路）直接画引线到引线，不绕行组节点，避免难看的下垂/绕线
-  const reqs = new Map(); // root -> [{ st, h, sym, ex }]
+  const reqs = new Map(); // root -> [{ st, h, sym, ex, compId, term }]
   const rootOf = (c, t) => find(key(c, t));
-  const addReq = (root, ST, horizontal, sym, exit = null) => {
+  const addReq = (root, ST, horizontal, sym, exit = null, compId = null, term = null) => {
     let list = reqs.get(root);
     if (!list) { list = []; reqs.set(root, list); }
-    const r = { st: ST, h: horizontal, sym, ex: exit };
+    const r = { st: ST, h: horizontal, sym, ex: exit, compId, term };
     list.push(r);
     return r;
   };
+  // 端子处「流入元件」电流（流向动画用）
+  const inAt = (r) => (r.compId ? termIn.get(`${r.compId}:${r.term}`) : 0) ?? 0;
+  // 折线路径（供流向动画跟踪），去掉相邻重复点
+  const polyD = (pts) => {
+    const clean = pts.filter((p, i) => i === 0 || p.x !== pts[i - 1].x || p.y !== pts[i - 1].y);
+    return 'M ' + clean.map(p => `${p.x} ${p.y}`).join(' L ');
+  };
+  // 流向路径收集：可见导线段（绘制循环追加）+ 穿过元件本体的段（元件循环追加）
+  const flowLinks = [];
   // 符号占位防重叠：与已放符号距离过近时沿垂直（或水平）方向逐格错开
   const nudgeM = (base, horizontal = true) => {
     let M = base, shift = 0;
@@ -141,7 +167,14 @@ export function renderSchematic(svg, bench, view, viewport) {
         if (!firstIsA) { aTerm = terms[1]; bTerm = terms[0]; PA = P2; PB = P1; }
       }
       const g = el('g', { transform: `translate(${M.x}, ${M.y})${horizontal ? '' : ' rotate(90)'}` }, symLayer);
-      drawSymbol(g, comp, aTerm, !horizontal);
+      // 引线长度：接线节点比 HL 更近时（如并联支路）缩短引线，让引线尖端恰好落在节点上，
+      // 避免导线伸进引线区、避免节点外留下出头线段
+      const bodyH = BODY_HALF[comp.type] ?? 15;
+      const gapA = sameNode ? HL : (horizontal ? Math.abs(PA.x - M.x) : Math.abs(PA.y - M.y));
+      const gapB = sameNode ? HL : (horizontal ? Math.abs(PB.x - M.x) : Math.abs(PB.y - M.y));
+      const leadA = Math.max(bodyH + 2, Math.min(HL, gapA));
+      const leadB = Math.max(bodyH + 2, Math.min(HL, gapB));
+      drawSymbol(g, comp, aTerm, !horizontal, leadA, leadB);
       const sym = pushBB(
         horizontal
           ? { x1: M.x - HL - 8, y1: M.y - 26, x2: M.x + HL + 8, y2: M.y + 26 }
@@ -149,34 +182,49 @@ export function renderSchematic(svg, bench, view, viewport) {
         horizontal
           ? { x1: M.x - 22, y1: M.y - 17, x2: M.x + 22, y2: M.y + 17 }
           : { x1: M.x - 17, y1: M.y - 22, x2: M.x + 17, y2: M.y + 22 });
-      const STA = { x: M.x + (horizontal ? -HL : 0), y: M.y + (horizontal ? 0 : -HL) };
-      const STB = { x: M.x + (horizontal ? HL : 0), y: M.y + (horizontal ? 0 : HL) };
+      const STA = { x: M.x + (horizontal ? -leadA : 0), y: M.y + (horizontal ? 0 : -leadA) };
+      const STB = { x: M.x + (horizontal ? leadB : 0), y: M.y + (horizontal ? 0 : leadB) };
+      // 穿过元件本体的流向路径：电流从 aTerm 引线进、bTerm 引线出
+      flowLinks.push({ d: polyD([STA, STB]), I: inAt({ compId: comp.id, term: aTerm }) });
       if (sameNode) {
-        addReq(rootOf(comp.id, aTerm), STA, true, sym);
-        addReq(rootOf(comp.id, aTerm), STB, true, sym);
+        addReq(rootOf(comp.id, aTerm), STA, true, sym, null, comp.id, aTerm);
+        addReq(rootOf(comp.id, aTerm), STB, true, sym, null, comp.id, bTerm);
         bump(PA); bump(PA);
       } else {
-        const rA = addReq(rootOf(comp.id, aTerm), STA, horizontal, sym);
-        const rB = addReq(rootOf(comp.id, bTerm), STB, horizontal, sym);
-        placements.push({ comp, g, sym, aTerm, bTerm, rA, rB, horizontal });
+        const rA = addReq(rootOf(comp.id, aTerm), STA, horizontal, sym, null, comp.id, aTerm);
+        const rB = addReq(rootOf(comp.id, bTerm), STB, horizontal, sym, null, comp.id, bTerm);
+        placements.push({ comp, g, sym, aTerm, bTerm, rA, rB, horizontal, leadA, leadB });
         bump(PA); bump(PB);
       }
-      drawLabel(labelLayer, comp, M, horizontal ? 34 : 46);
+      drawLabel(labelLayer, comp, M, horizontal ? 34 : 46, labels);
     } else if (comp.type === 'rheostat') {
       const PA = pointOf(comp.id, 'a'), PB = pointOf(comp.id, 'b'), PC = pointOf(comp.id, 'c');
       const M = nudgeM({ x: snapG(comp.x + 130, 30), y: snapG(comp.y + 70, 30) }, true);
       placedM.push(M);
-      // 滑片朝向 c 节点一侧，避免连线穿过电阻体
-      const flipY = isTermWired(comp.id, 'c') && PC.y > M.y;
+      // 滑杆朝向 c 节点一侧（c 节点在下方则整体上下镜像）；c 从滑杆靠节点的一端引出（人教版：滑杆端部接线）
+      const wiredC = isTermWired(comp.id, 'c');
+      const flipY = wiredC && PC.y > M.y;
+      const cLeft = wiredC && PC.x < M.x;
       const g = el('g', { transform: `translate(${M.x}, ${M.y})${flipY ? ' scale(1, -1)' : ''}` }, symLayer);
-      drawRheostat(g);
-      const sym = pushBB({ x1: M.x - HL - 8, y1: M.y - (flipY ? 16 : 32), x2: M.x + HL + 8, y2: M.y + (flipY ? 32 : 16) },
-        { x1: M.x - 30, y1: M.y - 11, x2: M.x + 30, y2: M.y + 11 });
+      drawRheostat(g, comp, wiredC ? cLeft : null);
+      const sym = pushBB({ x1: M.x - HL - 8, y1: M.y - (flipY ? 14 : 34), x2: M.x + HL + 8, y2: M.y + (flipY ? 34 : 14) },
+        { x1: M.x - 30, y1: M.y + (flipY ? -11 : -26), x2: M.x + 30, y2: M.y + (flipY ? 26 : 11) });
       // 只画实际接线的端子连线，未接线的端子不引出悬空线
-      if (isTermWired(comp.id, 'a')) { addReq(rootOf(comp.id, 'a'), { x: M.x - HL, y: M.y }, true, sym); bump(PA); }
-      if (isTermWired(comp.id, 'b')) { addReq(rootOf(comp.id, 'b'), { x: M.x + HL, y: M.y }, true, sym); bump(PB); }
-      if (isTermWired(comp.id, 'c')) { addReq(rootOf(comp.id, 'c'), { x: M.x, y: M.y + (flipY ? 26 : -26) }, false, sym, { dx: 0, dy: flipY ? 26 : -26 }); bump(PC); }
-      drawLabel(labelLayer, comp, M, 40);
+      if (isTermWired(comp.id, 'a')) { addReq(rootOf(comp.id, 'a'), { x: M.x - HL, y: M.y }, true, sym, null, comp.id, 'a'); bump(PA); }
+      if (isTermWired(comp.id, 'b')) { addReq(rootOf(comp.id, 'b'), { x: M.x + HL, y: M.y }, true, sym, null, comp.id, 'b'); bump(PB); }
+      if (wiredC) { addReq(rootOf(comp.id, 'c'), { x: M.x + (cLeft ? -HL : HL), y: M.y + (flipY ? 22 : -22) }, true, sym, null, comp.id, 'c'); bump(PC); }
+      // 流向路径：沿电阻丝到滑片、再沿滑杆到 c 端；未接 c 时电流贯穿整根电阻丝
+      const tInR = (t) => termIn.get(`${comp.id}:${t}`) ?? 0;
+      const slx = M.x - 28 + 56 * Math.max(0, Math.min(1, comp.params.x ?? 0.5));
+      const rodY = M.y + (flipY ? 22 : -22);
+      if (wiredC) {
+        flowLinks.push({ d: polyD([{ x: M.x - HL, y: M.y }, { x: slx, y: M.y }]), I: tInR('a') });
+        flowLinks.push({ d: polyD([{ x: M.x + HL, y: M.y }, { x: slx, y: M.y }]), I: tInR('b') });
+        flowLinks.push({ d: polyD([{ x: slx, y: M.y }, { x: slx, y: rodY }, { x: M.x + (cLeft ? -HL : HL), y: rodY }]), I: -tInR('c') });
+      } else {
+        flowLinks.push({ d: polyD([{ x: M.x - HL, y: M.y }, { x: M.x + HL, y: M.y }]), I: tInR('a') });
+      }
+      drawLabel(labelLayer, comp, M, 44, labels);
     } else if (comp.type === 'spdt-switch') {
       const PC = pointOf(comp.id, 'com'), PX = pointOf(comp.id, 'x'), PY = pointOf(comp.id, 'y');
       // 符号放在 com 节点与 x/y 节点之间的连线上，并按节点方位镜像：
@@ -195,10 +243,15 @@ export function renderSchematic(svg, bench, view, viewport) {
       const ty = flipY ? 16 : -16;
       // 引线先向符号外侧水平引出一小段，避免导线贴着刀口/触点穿回符号区域
       const exC = { dx: Math.sign(cx) * 26, dy: 0 }, exT = { dx: Math.sign(tx) * 26, dy: 0 };
-      if (isTermWired(comp.id, 'com')) { addReq(rootOf(comp.id, 'com'), { x: M.x + cx, y: M.y }, true, sym, exC); bump(PC); }
-      if (isTermWired(comp.id, 'x')) { addReq(rootOf(comp.id, 'x'), { x: M.x + tx, y: M.y + ty }, true, sym, exT); bump(PX); }
-      if (isTermWired(comp.id, 'y')) { addReq(rootOf(comp.id, 'y'), { x: M.x + tx, y: M.y - ty }, true, sym, exT); bump(PY); }
-      drawLabel(labelLayer, comp, M, 40);
+      if (isTermWired(comp.id, 'com')) { addReq(rootOf(comp.id, 'com'), { x: M.x + cx, y: M.y }, true, sym, exC, comp.id, 'com'); bump(PC); }
+      if (isTermWired(comp.id, 'x')) { addReq(rootOf(comp.id, 'x'), { x: M.x + tx, y: M.y + ty }, true, sym, exT, comp.id, 'x'); bump(PX); }
+      if (isTermWired(comp.id, 'y')) { addReq(rootOf(comp.id, 'y'), { x: M.x + tx, y: M.y - ty }, true, sym, exT, comp.id, 'y'); bump(PY); }
+      // 流向路径：com → 刀口 → 当前合上的触点（未合上的触点电流为 0，不显示）
+      const tInS = (t) => termIn.get(`${comp.id}:${t}`) ?? 0;
+      flowLinks.push({ d: polyD([{ x: M.x + cx, y: M.y }, { x: M.x, y: M.y }]), I: tInS('com') });
+      flowLinks.push({ d: polyD([{ x: M.x, y: M.y }, { x: M.x + tx, y: M.y + ty }]), I: -tInS('x') });
+      flowLinks.push({ d: polyD([{ x: M.x, y: M.y }, { x: M.x + tx, y: M.y - ty }]), I: -tInS('y') });
+      drawLabel(labelLayer, comp, M, 40, labels);
     }
   }
 
@@ -224,13 +277,16 @@ export function renderSchematic(svg, bench, view, viewport) {
     if (swp < cur) {
       const st = p.rA.st; p.rA.st = p.rB.st; p.rB.st = st;
       p.g.replaceChildren();
-      drawSymbol(p.g, p.comp, p.bTerm, !p.horizontal); // 交换后 bTerm 位于 A 侧（左/上）
+      drawSymbol(p.g, p.comp, p.bTerm, !p.horizontal, p.leadB, p.leadA); // 交换后 bTerm 位于 A 侧（左/上），引线长度随侧交换
     }
   }
 
   // 统一绘制连线：2 连接点的组直连引线，3 个及以上的组走星形到组节点（节点处画接点）
   // L 形拐角选择：优先不穿过任何符号（端点自身符号只豁免引线区，不豁免本体）
-  const drawSeg = (P, Q) => el('path', { d: `M ${P.x} ${P.y} L ${Q.x} ${Q.y}`, class: 'sch-wire' }, wireLayer);
+  const drawSeg = (P, Q) => {
+    el('path', { d: `M ${P.x} ${P.y} L ${Q.x} ${Q.y}`, class: 'sch-wire' }, wireLayer);
+    drawnSegs.push([P, Q]);
+  };
   const withExit = (r) => r.ex ? { x: r.st.x + r.ex.dx, y: r.st.y + r.ex.dy } : r.st;
   const route = (P, ST, owners, preferH = null) => {
     const hH = cornerScore(P, ST, owners, { x: P.x, y: ST.y });
@@ -238,6 +294,7 @@ export function renderSchematic(svg, bench, view, viewport) {
     const horiz = hH < hV ? true : hH > hV ? false
       : (preferH ?? (Math.abs(ST.x - P.x) >= Math.abs(ST.y - P.y)));
     connect(P, ST, horiz);
+    return horiz ? { x: P.x, y: ST.y } : { x: ST.x, y: P.y }; // L 形拐角点
   };
   for (const [root, list] of reqs) {
     if (list.length === 2) {
@@ -250,19 +307,26 @@ export function renderSchematic(svg, bench, view, viewport) {
           (segHitsBB({ x: r1.st.x, y: yy }, { x: r2.st.x, y: yy }, bb.o) ? 1 : 0) +
           (segHitsBB({ x: r2.st.x, y: yy }, r2.st, bb.o) ? 1 : 0), 0);
         const yy = scoreU(M.y - 70) <= scoreU(M.y + 70) ? M.y - 70 : M.y + 70;
-        el('path', { d: `M ${r1.st.x} ${r1.st.y} L ${r1.st.x} ${yy} L ${r2.st.x} ${yy} L ${r2.st.x} ${r2.st.y}`, class: 'sch-wire' }, wireLayer);
+        const d = `M ${r1.st.x} ${r1.st.y} L ${r1.st.x} ${yy} L ${r2.st.x} ${yy} L ${r2.st.x} ${r2.st.y}`;
+        el('path', { d, class: 'sch-wire' }, wireLayer);
+        drawnSegs.push([r1.st, { x: r1.st.x, y: yy }], [{ x: r1.st.x, y: yy }, { x: r2.st.x, y: yy }], [{ x: r2.st.x, y: yy }, r2.st]);
+        flowLinks.push({ d, I: inAt(r2) });
       } else {
         const E1 = withExit(r1), E2 = withExit(r2);
-        route(E1, E2, [r1.sym, r2.sym]);
+        const corner = route(E1, E2, [r1.sym, r2.sym]);
         if (E1 !== r1.st) drawSeg(r1.st, E1);
         if (E2 !== r2.st) drawSeg(r2.st, E2);
+        // 画线方向 r1 → r2；流入 r2 端子的电流即沿此方向
+        flowLinks.push({ d: polyD([r1.st, E1, corner, E2, r2.st]), I: inAt(r2) });
       }
     } else {
       const g = groups.get(root);
       for (const r of list) {
         const E = withExit(r);
-        route(g, E, [r.sym], r.h);
+        const corner = route(g, E, [r.sym], r.h);
         if (E !== r.st) drawSeg(E, r.st);
+        // 星形辐条画线方向 端子 → 组节点；流入元件的电流与此相反
+        flowLinks.push({ d: polyD([r.st, E, corner, { x: g.x, y: g.y }]), I: -inAt(r) });
       }
     }
   }
@@ -270,6 +334,20 @@ export function renderSchematic(svg, bench, view, viewport) {
   // 4. 三叉及以上节点：实心点
   for (const g of groups.values()) {
     if (g.count >= 3) el('circle', { cx: g.x, cy: g.y, r: 3.6, class: 'sch-junction' }, symLayer);
+  }
+
+  // 4b. 标签避让：标签被导线穿过时翻到符号另一侧；仍被撞再外移半格（极少数情况接受残留）
+  for (const { t, M, dy } of labels) {
+    try {
+      const pad = 3;
+      let bb = t.getBBox();
+      const hit = () => drawnSegs.some(([p, q]) =>
+        segHitsBB(p, q, { x1: bb.x - pad, y1: bb.y - pad, x2: bb.x + bb.width + pad, y2: bb.y + bb.height + pad }));
+      if (!hit()) continue;
+      t.setAttribute('y', M.y - dy);
+      bb = t.getBBox();
+      if (hit()) t.setAttribute('y', M.y - dy - GRID / 2);
+    } catch { /* getBBox 不可用时保持原位 */ }
   }
 
   // 5. 自适应取景：按实际内容收紧 viewBox，并把内容限定在未被面板遮挡的可视区内
@@ -297,19 +375,40 @@ export function renderSchematic(svg, bench, view, viewport) {
       }
     }
   } catch { /* getBBox 不可用时保留默认取景 */ }
+
+  // 6. 流向动画层：最顶层，路径与可见导线重合（由 app.js 的 FlowView 填充）
+  const flowLayer = el('g', { class: 'sch-flow-layer' }, svg);
+  return { flowLinks, flowLayer };
 }
 
 function snapG(v, grid = GRID) { return Math.round(v / grid) * grid; }
 
+// 符号本体沿轴线方向的半长：引线缩短时的下限，保证引线不缩进本体内部
+const BODY_HALF = {
+  'student-supply': 8, 'battery-pack': 8, accumulator: 8, switch: 12,
+  resistor: 28, 'resistance-box': 28, 'wire-board': 28,
+  bulb: 15, 'bulb-nl': 15, ammeter: 15, voltmeter: 15, galvanometer: 15,
+  diode: 11, led: 11, fuse: 14, bell: 14, motor: 15
+};
+
 // —— 标准符号绘制（教材画法；aTerm 为左侧/上侧对应的端子） ——
 // uprightText：符号整体被 rotate(90) 放竖时，把文字反向转回，保持字母与 +/− 标记正立
-function drawSymbol(g, comp, aTerm, uprightText = false) {
+// 约定：引线一律画到符号本体边缘为止，不伸进本体内部（矩形电阻到 ±28，圆形电表/灯泡到 ±15）。
+// leadA/leadB：左（上）/右（下）侧引线长度，默认 HL；节点更近时由调用方缩短，使引线尖端落在节点上。
+function drawSymbol(g, comp, aTerm, uprightText = false, leadA = HL, leadB = HL) {
   const line = (x1, y1, x2, y2, extra = {}) => el('line', { x1, y1, x2, y2, class: 'sch-sym', ...extra }, g);
-  const lead = () => { line(-HL, 0, -14, 0); line(14, 0, HL, 0); };
   const glyph = (s, attrs) => {
     const t = text(g, s, attrs);
     if (uprightText) t.setAttribute('transform', `rotate(-90 ${attrs.x} ${attrs.y})`);
     return t;
+  };
+  // 箭头头部：尖端 (tx,ty)，单位方向 (ux,uy)
+  const arrowHead = (parent, tx, ty, ux, uy, size = 7) => {
+    const nx = -uy, ny = ux, bx = tx - ux * size, by = ty - uy * size, hw = size * 0.45;
+    el('path', {
+      d: `M ${tx} ${ty} L ${(bx + nx * hw).toFixed(1)} ${(by + ny * hw).toFixed(1)} L ${(bx - nx * hw).toFixed(1)} ${(by - ny * hw).toFixed(1)} Z`,
+      class: 'sch-fill'
+    }, parent);
   };
   const value = symbolValue(comp);
 
@@ -318,7 +417,7 @@ function drawSymbol(g, comp, aTerm, uprightText = false) {
       // 电池：左/右极板，+ 在 aTerm==='pos' 一侧
       const posLeft = aTerm === 'pos';
       const px = posLeft ? -8 : 8, nx = posLeft ? 8 : -8;
-      line(-HL, 0, px, 0); line(nx, 0, HL, 0);
+      line(-leadA, 0, px, 0); line(nx, 0, leadB, 0);
       line(px, -16, px, 16);                       // 长极板
       line(nx, -7, nx, 7, { 'stroke-width': 5 });  // 短极板
       glyph('+', { x: px, y: -22, class: 'sch-label', 'font-size': 12 });
@@ -326,27 +425,29 @@ function drawSymbol(g, comp, aTerm, uprightText = false) {
       break;
     }
     case 'resistor': case 'resistance-box': case 'wire-board': {
-      lead();
+      // 矩形电阻：引线止于矩形边缘（人教版：导线不进入符号内部）
+      line(-leadA, 0, -28, 0); line(28, 0, leadB, 0);
       el('rect', { x: -28, y: -9, width: 56, height: 18, class: 'sch-sym' }, g);
       break;
     }
     case 'bulb': case 'bulb-nl': {
-      lead();
+      line(-leadA, 0, -15, 0); line(15, 0, leadB, 0);
       el('circle', { cx: 0, cy: 0, r: 15, class: 'sch-sym' }, g);
       line(-10, -10, 10, 10); line(-10, 10, 10, -10);
       break;
     }
     case 'switch': {
-      const closed = comp.params.closed;
-      line(-HL, 0, -12, 0);
-      el('circle', { cx: -12, cy: 0, r: 2.4, class: 'sch-fill' }, g);
-      el('circle', { cx: 14, cy: 0, r: 2.4, class: 'sch-fill' }, g);
-      line(14, 0, HL, 0);
-      line(-12, 0, closed ? 14 : 12, closed ? 0 : -17);
+      // 人教版：两端小圆圈为接线点，左端铰点；断开时刀片向右上倾斜，闭合时刀片放平接通
+      line(-leadA, 0, -13, 0);
+      line(13, 0, leadB, 0);
+      el('circle', { cx: -10, cy: 0, r: 2.8, class: 'sch-sym' }, g);
+      el('circle', { cx: 10, cy: 0, r: 2.8, class: 'sch-sym' }, g);
+      if (comp.params.closed) line(-10, 0, 10, 0);
+      else line(-10, 0, 8, -16);
       break;
     }
     case 'ammeter': case 'voltmeter': case 'galvanometer': {
-      lead();
+      line(-leadA, 0, -15, 0); line(15, 0, leadB, 0);
       el('circle', { cx: 0, cy: 0, r: 15, class: 'sch-sym' }, g);
       const letter = comp.type === 'ammeter' ? 'A' : comp.type === 'voltmeter' ? 'V' : 'G';
       glyph(letter, { x: 0, y: 5, class: 'sch-label', 'font-size': 14, 'text-anchor': 'middle' });
@@ -356,52 +457,59 @@ function drawSymbol(g, comp, aTerm, uprightText = false) {
       break;
     }
     case 'diode': case 'led': {
-      // 阳极在 aTerm==='an' 一侧；三角指向阴极
+      // 人教版：空心三角 + 竖线（阴极）；三角指向阴极。flip 时整体镜像，竖线随三角换侧
       const flip = aTerm !== 'an';
       const sub = el('g', { transform: flip ? 'scale(-1, 1)' : '' }, g);
-      line(-HL, 0, -10, 0, {}, ); line(10, 0, HL, 0);
-      el('path', { d: 'M -10 -10 L -10 10 L 9 0 Z', class: 'sch-fill' }, sub);
-      line(10, -11, 10, 11);
+      line(-leadA, 0, -10, 0); line(10, 0, leadB, 0);
+      el('path', { d: 'M -10 -10 L -10 10 L 9 0 Z', class: 'sch-sym' }, sub);
+      el('line', { x1: 10, y1: -11, x2: 10, y2: 11, class: 'sch-sym' }, sub);
       if (comp.type === 'led') {
-        line(2, -12, 10, -22); line(4, -20, 12, -14);
-        line(10, -12, 18, -22); line(12, -20, 20, -14);
+        // 人教版：两个斜向小箭头指向外侧表示发光
+        for (const [sx, sy] of [[1, -13], [8, -13]]) {
+          const tx = sx + 6.5, ty = sy - 6.5;
+          el('line', { x1: sx, y1: sy, x2: tx, y2: ty, class: 'sch-sym' }, sub);
+          arrowHead(sub, tx, ty, Math.SQRT1_2, -Math.SQRT1_2);
+        }
       }
       break;
     }
     case 'fuse': {
-      lead();
+      // 保险丝：小矩形（熔丝管），引线止于矩形边缘
+      line(-leadA, 0, -14, 0); line(14, 0, leadB, 0);
       el('rect', { x: -14, y: -6, width: 28, height: 12, class: 'sch-sym' }, g);
-      line(-28, 0, -14, 0); line(14, 0, 28, 0);
       break;
     }
     case 'bell': {
-      lead();
-      el('path', { d: 'M -14 4 A 14 14 0 0 1 14 4 Z', class: 'sch-sym' }, g);
-      el('circle', { cx: 0, cy: 7, r: 2, class: 'sch-fill' }, g);
+      // 人教版电铃：上半圆（拱形）+ 直径，直径两端引出接线
+      line(-leadA, 0, -14, 0); line(14, 0, leadB, 0);
+      el('path', { d: 'M -14 0 A 14 14 0 0 1 14 0 Z', class: 'sch-sym' }, g);
       break;
     }
     case 'motor': {
-      lead();
+      line(-leadA, 0, -15, 0); line(15, 0, leadB, 0);
       el('circle', { cx: 0, cy: 0, r: 15, class: 'sch-sym' }, g);
       glyph('M', { x: 0, y: 5, class: 'sch-label', 'font-size': 13, 'text-anchor': 'middle' });
       break;
     }
     default: {
-      lead();
+      line(-leadA, 0, -28, 0); line(28, 0, leadB, 0);
       el('rect', { x: -28, y: -9, width: 56, height: 18, class: 'sch-sym' }, g);
     }
   }
   void value;
 }
 
-function drawRheostat(g) {
+// 人教版滑动变阻器：矩形电阻丝 + 上方平行滑杆，滑片箭头按实际位置指向电阻丝。
+// c 端从滑杆靠接线节点的一端沿滑杆方向水平引出（cLeft 选左右；为 null 表示 c 未接线，不画引出）。
+function drawRheostat(g, comp, cLeft) {
   const line = (x1, y1, x2, y2, extra = {}) => el('line', { x1, y1, x2, y2, class: 'sch-sym', ...extra }, g);
-  line(-HL, 0, -28, 0); line(28, 0, HL, 0);
+  line(-HL, 0, -28, 0); line(28, 0, HL, 0);            // a / b 引线止于矩形边缘
   el('rect', { x: -28, y: -9, width: 56, height: 18, class: 'sch-sym' }, g);
-  // 滑片箭头（指向电阻器）
-  line(0, -26, 0, -10);
-  el('path', { d: 'M -4 -12 L 0 -8 L 4 -12', fill: 'none', class: 'sch-sym' }, g);
-  line(0, -26, 0, -26, {});
+  line(-28, -22, 28, -22);                             // 滑杆（与电阻丝平行等长）
+  const px = -28 + 56 * Math.max(0, Math.min(1, comp.params.x ?? 0.5));
+  line(px, -22, px, -10);                              // 滑片
+  el('path', { d: `M ${px - 4} -12 L ${px} -8 L ${px + 4} -12`, fill: 'none', class: 'sch-sym' }, g); // 滑片箭头
+  if (cLeft !== null) line(cLeft ? -28 : 28, -22, cLeft ? -HL : HL, -22); // c 端沿滑杆引出
 }
 
 function drawSpdt(g, toY) {
@@ -429,9 +537,11 @@ function symbolValue(comp) {
   }
 }
 
-function drawLabel(layer, comp, M, dy) {
+function drawLabel(layer, comp, M, dy, labels) {
   const def = DEFS[comp.type];
   const value = symbolValue(comp);
   const label = value ? `${def.label} ${value}` : def.label;
-  text(layer, label, { x: M.x, y: M.y + dy, class: 'sch-label', 'text-anchor': 'middle' });
+  const t = text(layer, label, { x: M.x, y: M.y + dy, class: 'sch-label', 'text-anchor': 'middle' });
+  labels?.push({ t, M, dy });
+  return t;
 }

@@ -1,4 +1,4 @@
-// 流向演示层：单模式动画。
+// 流向演示层：单模式动画，实物台与电路图共用。
 // current  —— 传统电流方向：琥珀色箭头沿导线前进方向流动；
 // electron —— 电子定向移动：蓝色圆点沿相反方向流动。
 // 速率为教学示意（随 |I| 变化），界面与模型说明中已披露。
@@ -6,8 +6,16 @@
 import { el } from './bench.js';
 
 const I_REF = 0.5;      // 参考电流：达到此值时流动最快
-const MIN_I = 0.003;    // 低于此电流不显示流动（视为断路）
+const MIN_I = 2e-4;     // 低于 0.2 mA 视为断路不显示（节点泄漏电流为 nA 级，不会误显）
 const ARROW_GAP = 46;   // 箭头沿导线的间距（bench 坐标）
+
+// 流速模型：与电流大小正相关（漂移速率 ∝ I 的教学化）。
+// 大电流支路全速，小电流支路缓慢蠕动——并联中高阻支路也能看到微流，
+// 只是明显更慢，对比本身就是教学点。断路（~nA）则不显示。
+function flowSpeed(i) {
+  const t = Math.min(1, Math.abs(i) / I_REF);
+  return 12 + 88 * Math.pow(t, 0.7);
+}
 
 export class FlowView {
   constructor(layer) {
@@ -15,23 +23,39 @@ export class FlowView {
     this.items = [];
   }
 
+  // 电路图每次重渲染都会重建图层，用 setLayer 指向最新图层
+  setLayer(layer) {
+    this.layer = layer;
+    this.items = [];
+  }
+
+  // 实物台：从求解结果逐根导线生成流动链接
   rebuild(mode, results, view, bench) {
+    if (!results?.ok) { this.clear(); return; }
+    const links = [];
+    for (const w of bench.wires) {
+      const r = results.wires.get(w.id);
+      if (!r) continue;
+      links.push({ d: view.wirePath(w), I: r.I }); // I 正方向 = wire.a → wire.b = 路径方向
+    }
+    this.buildFromLinks(mode, links);
+  }
+
+  // 通用入口：links = [{ d, I }]，I 的正方向即路径 d 的画线方向
+  buildFromLinks(mode, links) {
+    if (!this.layer) { this.items = []; return; }
     this.layer.replaceChildren();
     this.items = [];
     if (mode !== 'current' && mode !== 'electron') return;
-    if (!results?.ok) return;
 
-    for (const w of bench.wires) {
-      const r = results.wires.get(w.id);
-      if (!r || Math.abs(r.I) < MIN_I) continue;
-      const d = view.wirePath(w);
-      if (!d) continue;
-      const dir = Math.sign(r.I) || 1; // 电流正方向：wire.a → wire.b
-      const speed = (34 + 66 * Math.min(1, Math.abs(r.I) / I_REF)) * (mode === 'electron' ? -dir : dir);
+    for (const link of links) {
+      if (!link.d || Math.abs(link.I) < MIN_I) continue;
+      const dir = Math.sign(link.I) || 1;
+      const speed = flowSpeed(link.I) * (mode === 'electron' ? -dir : dir);
 
-      const path = el('path', { d, fill: 'none', stroke: 'none' }, this.layer);
+      const path = el('path', { d: link.d, fill: 'none', stroke: 'none' }, this.layer);
       const len = path.getTotalLength();
-      if (len < 20) { path.remove(); continue; }
+      if (len < 10) { path.remove(); continue; }
 
       if (mode === 'current') {
         // 箭头：沿路径均匀分布，按切线方向旋转
@@ -82,7 +106,7 @@ export class FlowView {
   }
 
   clear() {
-    this.layer.replaceChildren();
+    this.layer?.replaceChildren();
     this.items = [];
   }
 }

@@ -153,7 +153,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 .param-close:hover { color: var(--text) }
 
 /* —— 垃圾桶 —— */
-.trash-bin { position: fixed; z-index: 19; left: 26px; bottom: 96px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 14px 10px; border: 1.5px dashed rgba(70, 105, 135, .45); border-radius: 10px; background: rgba(255, 255, 255, .68); backdrop-filter: blur(10px); color: var(--muted); font-size: 10px; letter-spacing: .06em; opacity: 0; transform: translateY(16px) scale(.92); pointer-events: none; transition: opacity .18s ease, transform .18s ease }
+.trash-bin { position: fixed; z-index: 19; right: calc(50% + 145px); bottom: 18px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 14px 10px; border: 1.5px dashed rgba(70, 105, 135, .45); border-radius: 10px; background: rgba(255, 255, 255, .68); backdrop-filter: blur(10px); color: var(--muted); font-size: 10px; letter-spacing: .06em; opacity: 0; transform: translateY(16px) scale(.92); pointer-events: none; transition: opacity .18s ease, transform .18s ease }
 .trash-bin.show { opacity: 1; transform: translateY(0) scale(1) }
 .trash-bin.hover { border-color: var(--danger); border-style: solid; background: rgba(255, 238, 232, .92); color: var(--danger); transform: translateY(0) scale(1.06) }
 .trash-bin .trash-metal { fill: #7d8a94 }
@@ -272,7 +272,7 @@ dialog .tip { border-top: 1px solid var(--line); padding-top: 14px; color: var(-
   .zoom-controls { right: 10px; bottom: 148px }
   .param-bar { bottom: 92px; flex-wrap: wrap; gap: 10px; padding: 10px 12px }
   .param-bar .param-title { border: 0; padding: 0; width: 100% }
-  .trash-bin { left: 10px; bottom: 92px }
+  .trash-bin { left: 10px; right: auto; bottom: 96px }
   .event-banner { top: 72px }
 }
 @media (max-width: 520px) {
