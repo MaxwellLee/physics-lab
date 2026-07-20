@@ -31,3 +31,14 @@ main{position:relative;z-index:1}.hero{min-height:640px;padding:112px clamp(24px
 .galaxy-visual .arm-b{transform:rotate(102deg) skewX(-24deg)}.galaxy-visual .arm-c{transform:rotate(222deg) skewX(-24deg);opacity:.55}
 .galaxy-visual .solar-pin{position:absolute;left:68%;top:36%;width:7px;height:7px;border:1px solid #58e4ff;border-radius:50%;box-shadow:0 0 12px #58e4ff;z-index:4}
 .galaxy-visual .solar-pin:after{content:"太阳系";position:absolute;left:11px;top:-2px;color:#8bdff3;font-size:7px;letter-spacing:.12em;white-space:nowrap}
+.circuit-visual{background:radial-gradient(circle at 50% 46%,rgba(85,200,255,.14),transparent 52%),#050910}
+.cb-loop{position:absolute;left:18%;top:26%;width:64%;height:48%;border:1px solid rgba(120,210,240,.4);border-radius:10px}
+.cb-cell{position:absolute;left:14%;top:38%;width:4%;height:24%;display:flex;gap:22%;align-items:stretch;z-index:2}
+.cb-cell i{display:block;flex:1;background:rgba(159,222,255,.85)}
+.cb-cell i:last-child{transform:scaleY(.55);align-self:center}
+.cb-bulb{position:absolute;right:16%;top:42%;width:9%;aspect-ratio:1;border-radius:50%;border:1px solid rgba(255,213,150,.75);background:radial-gradient(circle at 42% 38%,rgba(255,228,168,.95),rgba(255,183,84,.32) 58%,transparent 74%);box-shadow:0 0 20px rgba(255,196,99,.5);z-index:2}
+.cb-meter{position:absolute;left:47%;top:19.5%;width:9%;aspect-ratio:1;border-radius:50%;border:1px solid rgba(120,210,240,.5);background:#081019;z-index:2}
+.cb-meter:after{content:"A";position:absolute;inset:0;display:grid;place-items:center;color:#8bdff3;font-size:9px;letter-spacing:.08em}
+.cb-dot{position:absolute;left:18%;top:26%;width:7px;height:7px;margin:-3.5px;border-radius:50%;background:#ffd596;box-shadow:0 0 10px #ffd596;z-index:3;animation:cbFlow 6s linear infinite}
+@keyframes cbFlow{0%{left:18%;top:26%}25%{left:82%;top:26%}50%{left:82%;top:74%}75%{left:18%;top:74%}100%{left:18%;top:26%}}
+@media (prefers-reduced-motion:reduce){.cb-dot{animation:none}}

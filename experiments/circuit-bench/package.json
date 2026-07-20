@@ -1,0 +1,5 @@
+{
+  "type": "module",
+  "private": true,
+  "description": "让 node 能直接以 ESM 方式运行本实验的物理层源码与测试；不参与构建。"
+}
