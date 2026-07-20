@@ -208,6 +208,11 @@ try {
   const supply = compIds.find(c => c.type === 'student-supply');
   const resistor = compIds.find(c => c.type === 'resistor');
 
+  // 取消选中收起参数条（避免遮挡接线柱），并居中框住两个元件
+  await evaluate('window.__cb.controller.select(null)');
+  await evaluate('document.getElementById("zoom-reset").click()');
+  await sleep(200);
+
   // 拖线：电源+ → 电阻a
   let t1 = await termCenter(supply.id, 'pos'), t2 = await termCenter(resistor.id, 'a');
   await dragTo(t1.x, t1.y, t2.x, t2.y);

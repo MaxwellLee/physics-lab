@@ -252,6 +252,42 @@ export function solveBench(bench) {
     results.set(cs.id, out);
   }
 
+  // 用电器被「纯导通路径」短接的判定：导线、闭合开关、电流表、完好保险丝、滑变金属杆
+  // 在教学模型中都是近理想导体（1 mΩ）。若用电器两端被这类路径直接连通，按理想化
+  // 处理其端电压视为 0——灯泡不亮、电铃不响、电动机不转（电流几乎全部抄近路走导线）。
+  const bp = new Map();
+  const bfind = (x) => {
+    if (!bp.has(x)) bp.set(x, x);
+    let r = x;
+    while (bp.get(r) !== r) r = bp.get(r);
+    let y = x;
+    while (bp.get(y) !== y) { const n = bp.get(y); bp.set(y, r); y = n; }
+    return r;
+  };
+  const bunion = (a, b) => bp.set(bfind(a), bfind(b));
+  for (const w of bench.wires) {
+    bunion(`${w.a.comp}:${w.a.term}`, `${w.b.comp}:${w.b.term}`);
+  }
+  for (const c of bench.components) {
+    const k = (t) => `${c.id}:${t}`;
+    if (c.type === 'switch' && c.params.closed) bunion(k('a'), k('b'));
+    else if (c.type === 'spdt-switch') bunion(k('com'), k(c.params.position === 'y' ? 'y' : 'x'));
+    else if (c.type === 'ammeter' || c.type === 'galvanometer') { bunion(k('minus'), k('low')); bunion(k('minus'), k('high')); }
+    else if (c.type === 'fuse' && !c.blown && !blownNow.has(c.id)) bunion(k('a'), k('b'));
+    else if (c.type === 'rheostat') bunion(k('c'), k('d'));
+  }
+  for (const cs of compState.values()) {
+    const out = results.get(cs.id);
+    if (!out) continue;
+    const isLoad = cs.type === 'bulb' || cs.type === 'bulb-nl' || cs.type === 'bell' || cs.type === 'motor' || cs.type === 'led';
+    if (!isLoad) continue;
+    const [t1, t2] = cs.type === 'led' ? ['an', 'ka'] : ['a', 'b'];
+    if (bfind(`${cs.id}:${t1}`) !== bfind(`${cs.id}:${t2}`)) continue;
+    if (out.brightness !== undefined) out.brightness = 0;
+    if (out.active !== undefined) out.active = false;
+    if (out.lit !== undefined) out.lit = false;
+  }
+
   // 导线电流（正方向：wire.a → wire.b）
   const wireResults = new Map();
   for (const w of bench.wires) {

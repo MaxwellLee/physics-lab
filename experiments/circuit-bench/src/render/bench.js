@@ -20,8 +20,8 @@ export function text(parent, str, attrs = {}) {
 
 // —— 视图世界范围：元件可摆放区域（bench 坐标）——
 export const WORLD = { x: -600, y: -400, w: 2400, h: 1500 };
-// 默认取景：以 (800, 380) 为中心、宽 1147（比早期默认放大 1.5 倍，方便拖拽与触屏）
-const DEFAULT_VIEW = { x: 227, y: 80, w: 1147 };
+// 默认取景：以 (800, 380) 为中心、宽 573（在早期基础上累计放大 3 倍，方便拖拽与触屏）
+const DEFAULT_VIEW = { x: 514, y: 229, w: 573 };
 const MIN_W = 420, MAX_W = 3400;
 
 // —— 元件几何与绘制定义 ——
