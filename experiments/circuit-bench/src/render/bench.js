@@ -348,6 +348,11 @@ export const GEOMETRY = {
       const hammer = el('g', { class: 'bell-hammer' }, g);
       line(hammer, 122, 100, 106, 80, '#4a5560', 2.5);
       circle(hammer, 105, 78, 4.5, '#4a5560', '#2f3942', 1);
+      // 声波弧线：通电响铃时由内向外扩散
+      const waves = el('g', { class: 'bell-waves' }, g);
+      el('path', { d: 'M 116 60 A 16 16 0 0 1 116 84', fill: 'none' }, waves);
+      el('path', { d: 'M 124 52 A 26 26 0 0 1 124 92', fill: 'none' }, waves);
+      el('path', { d: 'M 132 44 A 36 36 0 0 1 132 100', fill: 'none' }, waves);
       label(g, '电铃', 75, 128, 10, '#33414f');
     },
     update(g, comp, result) {
@@ -391,6 +396,7 @@ function drawBulb(g, comp) {
   line(g, 61, 96, 89, 96, '#9aa1a9', 1.2);
   line(g, 61, 102, 89, 102, '#9aa1a9', 1.2);
   // 玻璃泡与灯丝
+  circle(g, 75, 58, 46, 'rgba(255, 200, 70, 0)', 'none', 0).classList.add('bulb-halo');
   circle(g, 75, 58, 32, nl ? 'rgba(255,226,190,.4)' : 'rgba(255,252,240,.4)', nl ? '#d98a4e' : '#aeb9c2', 1.5)
     .classList.add('bulb-glass');
   line(g, 68, 84, 71, 66, '#8fa9b6', 1.6);
@@ -400,9 +406,16 @@ function drawBulb(g, comp) {
 }
 function updateBulb(g, comp, result) {
   const glass = g.querySelector('.bulb-glass');
+  const filament = g.querySelector('.filament');
+  const halo = g.querySelector('.bulb-halo');
   const b = result?.brightness ?? 0;
-  glass.classList.toggle('on', b > 0.03);
-  glass.style.opacity = b > 0.03 ? String(Math.min(1, 0.35 + b * 0.65)) : '';
+  const on = b > 0.03;
+  glass.classList.toggle('on', on);
+  glass.style.opacity = on ? String(Math.min(1, 0.35 + b * 0.65)) : '';
+  filament.classList.toggle('on', on);
+  halo.classList.toggle('on', on);
+  if (on) halo.style.opacity = String(Math.min(1, 0.25 + b * 0.75));
+  else halo.style.opacity = '';
 }
 
 // 三接线柱学校电表：白色表箱 + 半圆表盘 + 底部 −/低/高量程接线柱

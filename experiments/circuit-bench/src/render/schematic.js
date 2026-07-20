@@ -76,6 +76,72 @@ export function renderSchematic(svg, bench, view, viewport, results) {
   const isTermWired = (compId, term) => bench.wires.some(w =>
     (w.a.comp === compId && w.a.term === term) || (w.b.comp === compId && w.b.term === term));
 
+  // 每个等势组的接线点数（2 = 串联过路；≥3 = 分叉节点）
+  const connCount = new Map();
+  for (const c of bench.components) {
+    const def = DEFS[c.type];
+    let ts = def.terminals;
+    if (def.kind === 'meter') {
+      ts = ['minus', isTermWired(c.id, 'low') ? 'low' : isTermWired(c.id, 'high') ? 'high' : 'low'];
+    } else if (c.type === 'rheostat' || c.type === 'spdt-switch') {
+      ts = ts.filter(t => isTermWired(c.id, t));
+    }
+    for (const t of ts) {
+      const r = find(key(c.id, t));
+      connCount.set(r, (connCount.get(r) ?? 0) + 1);
+    }
+  }
+
+  // 串联共线：被「2 点组」串起来的两端元件，符号尽量摆在同一条水平/竖直线上，
+  // 让组内走线退化成一条直线，消除成排的 L 形拐角（对齐幅度限制在一格以内，
+  // 偏差太大说明实物摆位本身错落，保留 L 形更真实）
+  const twoTermInfo = new Map(); // compId -> { rootA, rootB, horizontal, baseM }
+  for (const c of bench.components) {
+    const def = DEFS[c.type];
+    let ts = def.terminals;
+    if (def.kind === 'meter') {
+      ts = ['minus', isTermWired(c.id, 'low') ? 'low' : isTermWired(c.id, 'high') ? 'high' : 'low'];
+    }
+    if (ts.length !== 2 || c.type === 'rheostat' || c.type === 'spdt-switch') continue;
+    const rA = find(key(c.id, ts[0])), rB = find(key(c.id, ts[1]));
+    if (rA === rB) continue;
+    const P1 = pointOf(c.id, ts[0]), P2 = pointOf(c.id, ts[1]);
+    twoTermInfo.set(c.id, {
+      rootA: rA, rootB: rB,
+      horizontal: Math.abs(P2.x - P1.x) >= Math.abs(P2.y - P1.y),
+      baseM: { x: snapG((P1.x + P2.x) / 2, 30), y: snapG((P1.y + P2.y) / 2, 30) }
+    });
+  }
+  const rootComps = new Map(); // root -> [compId]（仅电路图中按两端处理的元件）
+  for (const [id, info] of twoTermInfo) {
+    for (const r of [info.rootA, info.rootB]) {
+      const l = rootComps.get(r) ?? []; l.push(id); rootComps.set(r, l);
+    }
+  }
+  const aligned = new Map(); // compId -> { horizontal, coord }
+  // 串联对共线：由「2 点组」直接相连的两个两端元件，若符号基本在同一水平/竖直线附近
+  // （偏差 ≤ 1 格），把两者对齐到同一直线，组内走线退化成一条直线，消除小台阶。
+  // 只微调相邻元件对，不做整链对齐——避免把回路首尾拉到同一直线上造成跨元件穿线。
+  const pairs = [];
+  for (const [r, ids] of rootComps) {
+    if ((connCount.get(r) ?? 0) !== 2 || ids.length !== 2) continue;
+    const A = twoTermInfo.get(ids[0]), B = twoTermInfo.get(ids[1]);
+    if (A.horizontal !== B.horizontal) continue;
+    const horiz = A.horizontal;
+    const ca = horiz ? A.baseM.y : A.baseM.x;
+    const cb = horiz ? B.baseM.y : B.baseM.x;
+    const d = Math.abs(ca - cb);
+    if (d > GRID) continue;
+    pairs.push({ a: ids[0], b: ids[1], horiz, coord: snapG((ca + cb) / 2, 30), d });
+  }
+  // 偏差小的对优先；一个元件只参与一次对齐，避免多对拉扯
+  pairs.sort((p, q) => p.d - q.d);
+  for (const p of pairs) {
+    if (aligned.has(p.a) || aligned.has(p.b)) continue;
+    aligned.set(p.a, { horizontal: p.horiz, coord: p.coord });
+    aligned.set(p.b, { horizontal: p.horiz, coord: p.coord });
+  }
+
   // 3. 元件符号与走线
   const wireLayer = el('g', {}, svg);
   const symLayer = el('g', {}, svg);
@@ -156,9 +222,14 @@ export function renderSchematic(svg, bench, view, viewport, results) {
       const baseM = sameNode
         ? { x: P1.x, y: P1.y - 90 }
         : { x: snapG((P1.x + P2.x) / 2, 30), y: snapG((P1.y + P2.y) / 2, 30) };
-      // 并联分支：同一对节点间的多个元件，符号沿垂直方向错开
+      // 串联链共线：同链元件符号对齐到同一坐标，组内走线拉成直线
       let M = baseM;
-      if (!sameNode) M = nudgeM(baseM, horizontal);
+      const al = !sameNode && aligned.get(comp.id);
+      if (al && al.horizontal === horizontal) {
+        M = horizontal ? { x: baseM.x, y: al.coord } : { x: al.coord, y: baseM.y };
+      }
+      // 并联分支：同一对节点间的多个元件，符号沿垂直方向错开
+      if (!sameNode) M = nudgeM(M, horizontal);
       placedM.push(M);
       // A 侧（左/上）对应哪个端子
       let aTerm = terms[0], bTerm = terms[1], PA = P1, PB = P2;
@@ -174,7 +245,7 @@ export function renderSchematic(svg, bench, view, viewport, results) {
       const gapB = sameNode ? HL : (horizontal ? Math.abs(PB.x - M.x) : Math.abs(PB.y - M.y));
       const leadA = Math.max(bodyH + 2, Math.min(HL, gapA));
       const leadB = Math.max(bodyH + 2, Math.min(HL, gapB));
-      drawSymbol(g, comp, aTerm, !horizontal, leadA, leadB);
+      const internalPath = drawSymbol(g, comp, aTerm, !horizontal, leadA, leadB);
       const sym = pushBB(
         horizontal
           ? { x1: M.x - HL - 8, y1: M.y - 26, x2: M.x + HL + 8, y2: M.y + 26 }
@@ -184,8 +255,11 @@ export function renderSchematic(svg, bench, view, viewport, results) {
           : { x1: M.x - 17, y1: M.y - 22, x2: M.x + 17, y2: M.y + 22 });
       const STA = { x: M.x + (horizontal ? -leadA : 0), y: M.y + (horizontal ? 0 : -leadA) };
       const STB = { x: M.x + (horizontal ? leadB : 0), y: M.y + (horizontal ? 0 : leadB) };
-      // 穿过元件本体的流向路径：电流从 aTerm 引线进、bTerm 引线出
-      flowLinks.push({ d: polyD([STA, STB]), I: inAt({ compId: comp.id, term: aTerm }) });
+      // 穿过元件本体的流向路径：电流从 aTerm 引线进、bTerm 引线出；
+      // 符号有内部绕行路径（如电铃沿短柱上铃罩）时沿内部路径走
+      const loc = ([lx, ly]) => horizontal ? { x: M.x + lx, y: M.y + ly } : { x: M.x - ly, y: M.y + lx };
+      const bodyFlow = { d: polyD([STA, ...(internalPath ?? []).map(loc), STB]), I: inAt({ compId: comp.id, term: aTerm }) };
+      flowLinks.push(bodyFlow);
       if (sameNode) {
         addReq(rootOf(comp.id, aTerm), STA, true, sym, null, comp.id, aTerm);
         addReq(rootOf(comp.id, aTerm), STB, true, sym, null, comp.id, bTerm);
@@ -193,7 +267,7 @@ export function renderSchematic(svg, bench, view, viewport, results) {
       } else {
         const rA = addReq(rootOf(comp.id, aTerm), STA, horizontal, sym, null, comp.id, aTerm);
         const rB = addReq(rootOf(comp.id, bTerm), STB, horizontal, sym, null, comp.id, bTerm);
-        placements.push({ comp, g, sym, aTerm, bTerm, rA, rB, horizontal, leadA, leadB });
+        placements.push({ comp, g, sym, aTerm, bTerm, rA, rB, horizontal, leadA, leadB, bodyFlow });
         bump(PA); bump(PB);
       }
       drawLabel(labelLayer, comp, M, horizontal ? 34 : 46, labels);
@@ -201,22 +275,22 @@ export function renderSchematic(svg, bench, view, viewport, results) {
       const PA = pointOf(comp.id, 'a'), PB = pointOf(comp.id, 'b'), PC = pointOf(comp.id, 'c');
       const M = nudgeM({ x: snapG(comp.x + 130, 30), y: snapG(comp.y + 70, 30) }, true);
       placedM.push(M);
-      // 滑杆朝向 c 节点一侧（c 节点在下方则整体上下镜像）；c 从滑杆靠节点的一端引出（人教版：滑杆端部接线）
+      // 人教版标准画法：滑杆固定在电阻丝上方，不随节点方位镜像；c 从滑杆靠节点的一端引出，
+      // 节点在下方时由走线自己折下去，符号本体始终保持正向
       const wiredC = isTermWired(comp.id, 'c');
-      const flipY = wiredC && PC.y > M.y;
       const cLeft = wiredC && PC.x < M.x;
-      const g = el('g', { transform: `translate(${M.x}, ${M.y})${flipY ? ' scale(1, -1)' : ''}` }, symLayer);
+      const g = el('g', { transform: `translate(${M.x}, ${M.y})` }, symLayer);
       drawRheostat(g, comp, wiredC ? cLeft : null);
-      const sym = pushBB({ x1: M.x - HL - 8, y1: M.y - (flipY ? 14 : 34), x2: M.x + HL + 8, y2: M.y + (flipY ? 34 : 14) },
-        { x1: M.x - 30, y1: M.y + (flipY ? -11 : -26), x2: M.x + 30, y2: M.y + (flipY ? 26 : 11) });
+      const sym = pushBB({ x1: M.x - HL - 8, y1: M.y - 34, x2: M.x + HL + 8, y2: M.y + 14 },
+        { x1: M.x - 30, y1: M.y - 26, x2: M.x + 30, y2: M.y + 11 });
       // 只画实际接线的端子连线，未接线的端子不引出悬空线
       if (isTermWired(comp.id, 'a')) { addReq(rootOf(comp.id, 'a'), { x: M.x - HL, y: M.y }, true, sym, null, comp.id, 'a'); bump(PA); }
       if (isTermWired(comp.id, 'b')) { addReq(rootOf(comp.id, 'b'), { x: M.x + HL, y: M.y }, true, sym, null, comp.id, 'b'); bump(PB); }
-      if (wiredC) { addReq(rootOf(comp.id, 'c'), { x: M.x + (cLeft ? -HL : HL), y: M.y + (flipY ? 22 : -22) }, true, sym, null, comp.id, 'c'); bump(PC); }
+      if (wiredC) { addReq(rootOf(comp.id, 'c'), { x: M.x + (cLeft ? -HL : HL), y: M.y - 22 }, true, sym, null, comp.id, 'c'); bump(PC); }
       // 流向路径：沿电阻丝到滑片、再沿滑杆到 c 端；未接 c 时电流贯穿整根电阻丝
       const tInR = (t) => termIn.get(`${comp.id}:${t}`) ?? 0;
       const slx = M.x - 28 + 56 * Math.max(0, Math.min(1, comp.params.x ?? 0.5));
-      const rodY = M.y + (flipY ? 22 : -22);
+      const rodY = M.y - 22;
       if (wiredC) {
         flowLinks.push({ d: polyD([{ x: M.x - HL, y: M.y }, { x: slx, y: M.y }]), I: tInR('a') });
         flowLinks.push({ d: polyD([{ x: M.x + HL, y: M.y }, { x: slx, y: M.y }]), I: tInR('b') });
@@ -256,9 +330,15 @@ export function renderSchematic(svg, bench, view, viewport, results) {
   }
 
   // 端子方位校正：两端元件若交换左/右（上/下）引线归属能减少穿符号，则交换并重画符号
+  // 拐角代价：穿过任何符号本体（内框）重罚 100，仅擦过非端点符号外框（引线区）罚 1，
+  // 避免「擦球而过」与「穿心而过」被判同分，导致走线穿过元件本体
   const cornerScore = (A, B, owners, corner) => placedBB.reduce((n, bb, i) => {
-    const box = owners.includes(i) ? bb.b : bb.o;
-    return n + (segHitsBB(A, corner, box) ? 1 : 0) + (segHitsBB(corner, B, box) ? 1 : 0);
+    const own = owners.includes(i);
+    const body = segHitsBB(A, corner, bb.b) ? 1 : 0;
+    const outer = !own && segHitsBB(A, corner, bb.o) ? 1 : 0;
+    const body2 = segHitsBB(corner, B, bb.b) ? 1 : 0;
+    const outer2 = !own && segHitsBB(corner, B, bb.o) ? 1 : 0;
+    return n + (body + body2) * 100 + outer + outer2;
   }, 0);
   const minHits = (A, B, owners) => Math.min(
     cornerScore(A, B, owners, { x: A.x, y: B.y }),
@@ -278,6 +358,29 @@ export function renderSchematic(svg, bench, view, viewport, results) {
       const st = p.rA.st; p.rA.st = p.rB.st; p.rB.st = st;
       p.g.replaceChildren();
       drawSymbol(p.g, p.comp, p.bTerm, !p.horizontal, p.leadB, p.leadA); // 交换后 bTerm 位于 A 侧（左/上），引线长度随侧交换
+      p.bodyFlow.I = -p.bodyFlow.I; // 端子归属换侧，穿过本体的流向同步取反
+    }
+  }
+
+  // 星形节点对齐：组节点向辐条引线的轴线靠拢（±24 内），对应辐条从 L 形拉成一条直线
+  for (const [root, list] of reqs) {
+    if (list.length < 3) continue;
+    const g = groups.get(root);
+    const straighten = (vals, cur) => {
+      let best = cur, bestN = vals.filter(v => v === cur).length;
+      for (const v of vals) {
+        if (Math.abs(v - cur) > 24) continue;
+        const n = vals.filter(x => x === v).length;
+        if (n > bestN) { bestN = n; best = v; }
+      }
+      return best;
+    };
+    const ny = straighten(list.filter(r => r.h).map(r => (r.ex ? r.st.y + r.ex.dy : r.st.y)), g.y);
+    const nx = straighten(list.filter(r => !r.h).map(r => (r.ex ? r.st.x + r.ex.dx : r.st.x)), g.x);
+    if ((nx !== g.x || ny !== g.y) && !used.has(`${nx},${ny}`)) {
+      used.delete(`${g.x},${g.y}`);
+      g.x = nx; g.y = ny;
+      used.add(`${nx},${ny}`);
     }
   }
 
@@ -385,7 +488,7 @@ function snapG(v, grid = GRID) { return Math.round(v / grid) * grid; }
 
 // 符号本体沿轴线方向的半长：引线缩短时的下限，保证引线不缩进本体内部
 const BODY_HALF = {
-  'student-supply': 8, 'battery-pack': 8, accumulator: 8, switch: 12,
+  'student-supply': 8, 'battery-pack': 8, accumulator: 8, switch: 15,
   resistor: 28, 'resistance-box': 28, 'wire-board': 28,
   bulb: 15, 'bulb-nl': 15, ammeter: 15, voltmeter: 15, galvanometer: 15,
   diode: 11, led: 11, fuse: 14, bell: 14, motor: 15
@@ -411,6 +514,8 @@ function drawSymbol(g, comp, aTerm, uprightText = false, leadA = HL, leadB = HL)
     }, parent);
   };
   const value = symbolValue(comp);
+  // 元件内部电流路径（符号局部坐标）：多数元件沿轴线直通，电铃等绕行铃罩
+  let internal = null;
 
   switch (comp.type) {
     case 'student-supply': case 'battery-pack': case 'accumulator': {
@@ -437,13 +542,13 @@ function drawSymbol(g, comp, aTerm, uprightText = false, leadA = HL, leadB = HL)
       break;
     }
     case 'switch': {
-      // 人教版：两端小圆圈为接线点，左端铰点；断开时刀片向右上倾斜，闭合时刀片放平接通
-      line(-leadA, 0, -13, 0);
-      line(13, 0, leadB, 0);
-      el('circle', { cx: -10, cy: 0, r: 2.8, class: 'sch-sym' }, g);
-      el('circle', { cx: 10, cy: 0, r: 2.8, class: 'sch-sym' }, g);
+      // 人教版：两端空心圆圈为接线点，刀片铰于左圈；断开向右上倾斜，闭合放平接通
+      line(-leadA, 0, -14.5, 0);
+      line(14.5, 0, leadB, 0);
+      el('circle', { cx: -10, cy: 0, r: 4.5, class: 'sch-sym' }, g);
+      el('circle', { cx: 10, cy: 0, r: 4.5, class: 'sch-sym' }, g);
       if (comp.params.closed) line(-10, 0, 10, 0);
-      else line(-10, 0, 8, -16);
+      else line(-10, 0, 7, -15);
       break;
     }
     case 'ammeter': case 'voltmeter': case 'galvanometer': {
@@ -480,9 +585,13 @@ function drawSymbol(g, comp, aTerm, uprightText = false, leadA = HL, leadB = HL)
       break;
     }
     case 'bell': {
-      // 人教版电铃：上半圆（拱形）+ 直径，直径两端引出接线
-      line(-leadA, 0, -14, 0); line(14, 0, leadB, 0);
-      el('path', { d: 'M -14 0 A 14 14 0 0 1 14 0 Z', class: 'sch-sym' }, g);
+      // 人教版电铃（蘑菇形）：半圆铃罩（拱形+直径）架在两条短柱上，接线从短柱底端引出
+      el('path', { d: 'M -13 -13 A 13 13 0 0 1 13 -13 Z', class: 'sch-sym' }, g);
+      line(-6, -13, -6, 0);
+      line(6, -13, 6, 0);
+      line(-leadA, 0, -6, 0);
+      line(6, 0, leadB, 0);
+      internal = [[-6, 0], [-6, -13], [6, -13], [6, 0]];
       break;
     }
     case 'motor': {
@@ -497,6 +606,7 @@ function drawSymbol(g, comp, aTerm, uprightText = false, leadA = HL, leadB = HL)
     }
   }
   void value;
+  return internal;
 }
 
 // 人教版滑动变阻器：矩形电阻丝 + 上方平行滑杆，滑片箭头按实际位置指向电阻丝。

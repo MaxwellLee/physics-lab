@@ -49,7 +49,12 @@ export class Panels {
         btn.className = 'comp-item';
         btn.dataset.type = type;
         btn.innerHTML = `<i>${iconOf(type)}</i><span><b>${DEFS[type].label}</b><small>${CATALOG[type].brief.split('。')[0]}。</small></span>`;
-        btn.addEventListener('click', () => this.armPlacement(type, btn));
+        btn.addEventListener('click', () => {
+          // 拖拽放置后的那次 click 不再触发点选
+          if (this.suppressClick) { this.suppressClick = false; return; }
+          this.armPlacement(type, btn);
+        });
+        this.attachDrag(btn, type);
         group.appendChild(btn);
       }
       list.appendChild(group);
@@ -84,6 +89,53 @@ export class Panels {
     this.placementType = null;
     document.querySelectorAll('.comp-item').forEach(b => b.classList.remove('armed'));
     this.hooks.onPlacementArmed?.(null);
+  }
+
+  // 从元件箱直接拖拽到台面放置（横向拖动触发，纵向留给列表滚动）
+  attachDrag(btn, type) {
+    let start = null;   // { x, y }
+    let ghost = null;   // 跟随指针的幽灵预览
+    const cleanup = () => {
+      ghost?.remove();
+      ghost = null;
+      start = null;
+    };
+    btn.addEventListener('pointerdown', (e) => {
+      if (e.button !== undefined && e.button !== 0) return;
+      start = { x: e.clientX, y: e.clientY };
+    });
+    window.addEventListener('pointermove', (e) => {
+      if (!start) return;
+      const dx = e.clientX - start.x, dy = e.clientY - start.y;
+      if (!ghost) {
+        // 明确的横向拖动才进入放置拖拽（comp-item 的 touch-action: pan-y 保证纵向滚动不受影响）
+        if (Math.abs(dx) < 10 || Math.abs(dx) <= Math.abs(dy)) return;
+        this.clearPlacement();
+        ghost = document.createElement('div');
+        ghost.className = 'drag-ghost';
+        ghost.innerHTML = `<i>${iconOf(type)}</i>${DEFS[type].label}`;
+        document.body.appendChild(ghost);
+      }
+      ghost.style.left = `${e.clientX}px`;
+      ghost.style.top = `${e.clientY}px`;
+    });
+    window.addEventListener('pointerup', (e) => {
+      if (!start) return;
+      const wasDragging = !!ghost;
+      cleanup();
+      if (!wasDragging) return;
+      if (btn.contains(e.target)) {
+        // 拖了一圈又回到按钮上松手：这次 click 不再触发点选
+        this.suppressClick = true;
+        return;
+      }
+      const svg = $('bench-svg');
+      const r = svg.getBoundingClientRect();
+      if (!svg.hidden && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) {
+        this.hooks.onDropPlace?.(type, e.clientX, e.clientY);
+      }
+    });
+    window.addEventListener('pointercancel', () => cleanup());
   }
 
   // —— 左侧：演示电路 ——

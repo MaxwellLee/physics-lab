@@ -90,7 +90,7 @@
   </aside>
   <button class="inspector-reopen" id="inspector-reopen" hidden aria-label="展开资料面板">i <span>资料</span></button>
 
-  <div class="hint-bar" id="hint-bar">从元件箱点选元件放到台面 · 从接线柱拖出导线，或点两个接线柱连线 · 点击元件查看参数 · 按住空白处可拖动画布</div>
+  <div class="hint-bar" id="hint-bar">从元件箱拖出或点选元件放到台面 · 从接线柱拖出导线，或点两个接线柱连线 · 点击元件查看参数 · 按住空白处可拖动画布</div>
 
   <div class="trash-bin" id="trash-bin" aria-hidden="true">
     <svg viewBox="0 0 48 56" width="46" height="54" aria-hidden="true">
@@ -107,26 +107,29 @@
 
   <div class="param-bar" id="param-bar" hidden></div>
 
-  <div class="zoom-controls" id="zoom-controls" role="group" aria-label="视图缩放">
-    <button id="zoom-in" aria-label="放大视图">＋</button>
-    <button id="zoom-out" aria-label="缩小视图">－</button>
-    <button id="zoom-reset" aria-label="重置视图">⌂</button>
-  </div>
-
   <section class="transport" aria-label="实验控制">
     <button id="flow-button" aria-label="循环切换：静态 / 电流方向 / 电子移动"><b>流向 · 关</b><small>电流 / 电子</small></button>
     <button id="view-button" aria-label="切换实物台与电路图"><b>实物台</b><small>视图切换</small></button>
+    <button id="zoom-in" aria-label="放大视图"><span>＋</span><small>放大</small></button>
+    <button id="zoom-out" aria-label="缩小视图"><span>－</span><small>缩小</small></button>
+    <button id="zoom-reset" aria-label="视图居中复位"><span>⌂</span><small>居中</small></button>
     <button id="reset-button" aria-label="复位实验台"><span>↺</span><small>复位</small></button>
   </section>
 
   <button class="model-info" id="model-info" aria-label="打开模型说明">?</button>
+  <dialog id="short-dialog" class="alert-dialog" aria-labelledby="short-title">
+    <small>SHORT CIRCUIT WARNING</small>
+    <h2 id="short-title">⚠ 检测到短路</h2>
+    <p id="short-detail"></p>
+    <button class="alert-ok" id="short-ok">知道了</button>
+  </dialog>
   <dialog id="model-dialog">
     <button class="dialog-close" id="dialog-close" aria-label="关闭">×</button>
     <small>MODEL NOTES</small><h2>模型说明与操作</h2>
     <p>本实验面向初中电学。所有电路按直流稳态求解：导通元件（导线、闭合开关、电流表、完好保险丝）含 1 mΩ 教学残余电阻，使每条支路电流可计算、短路电流为有限值；电压表视为理想开路；电源忽略内阻；每个节点带有 1 GΩ 对地泄漏以保证悬空点电势有定义（物理影响可忽略）。</p>
     <p>电流表、电压表、灵敏电流计均为三接线柱结构（人教版样式）：黑色“−”为公共接线柱，两个红色接线柱分别对应两个量程，量程由实际接线的接线柱决定。电表按理想处理：电流表不计内阻、电压表内阻视为无穷大。普通灯泡按定值电阻处理；非线性灯泡采用经验模型 R(U)，热态电阻约为冷态十倍量级，复现真实白炽灯的弯曲伏安特性，数值为教学模型而非某只具体灯泡的测量值。二极管按理想单向导通处理。电铃、电动机简化为“达到工作电流即动作”的用电器，不模拟内部磁学。短路时电流显示为有限大数值并给出警告，接入保险丝可观察熔断保护。</p>
     <p>流向演示中，电流方向按“正电荷定向移动方向”绘制，电子流向与之相反；流动速率是夸张的示意——真实电子定向移动速率约 0.1 mm/s 量级，而电场几乎瞬间在全电路建立。</p>
-    <p>操作：从元件箱点选元件放到台面；从接线柱拖出导线，或先后点击两个接线柱连线；点击元件在底部参数条调节参数；点击开关可开合；拖动元件时左下角出现垃圾桶，丢入即可删除；按住空白处拖动画布，右下角按钮或滚轮缩放；Delete 删除选中，Esc 取消连线。“视图切换”可把实物图一键转换为标准电路图（布局可能与标准画法不同）。</p>
+    <p>操作：从元件箱拖出或点选元件放到台面；从接线柱拖出导线，或先后点击两个接线柱连线；点击元件在底部参数条调节参数；点击开关可开合；拖动元件时左下角出现垃圾桶，丢入即可删除；按住空白处拖动画布，右下角按钮或滚轮缩放；Delete 删除选中，Esc 取消连线。“视图切换”可把实物图一键转换为标准电路图（布局可能与标准画法不同）。</p>
     <p class="tip">所有图形均为程序绘制，无外部素材。物理依据与理想化清单见 experiments/circuit-bench/SOURCES.md。</p>
   </dialog>
 

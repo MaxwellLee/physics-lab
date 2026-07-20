@@ -48,6 +48,9 @@ function boot() {
       banner.hidden = true;
       $('status-dot').classList.remove('warn');
       $('sim-status').textContent = 'CIRCUIT READY';
+      shortShownSig = null; // 短路排除后，下次再短路时重新弹窗
+      const dlg = $('short-dialog');
+      if (dlg.open) dlg.close(); // 短路已排除，自动收起弹窗
       return;
     }
     const events = results.events;
@@ -56,6 +59,13 @@ function boot() {
     const isShort = events.some(e => e.type === 'short');
     $('status-dot').classList.toggle('warn', isShort);
     $('sim-status').textContent = isShort ? 'SHORT CIRCUIT' : 'CIRCUIT READY';
+    if (isShort && sig !== shortShownSig) {
+      // 短路红字弹窗：每种短路形态只弹一次，排除后再短路会重新弹
+      shortShownSig = sig;
+      $('short-detail').textContent = BANNER_TEXT.short()[1];
+      const dlg = $('short-dialog');
+      if (!dlg.open) dlg.showModal();
+    }
     if (!top || sig === dismissedSig) { banner.hidden = true; return; }
     const [title, detail] = BANNER_TEXT[top.type](top);
     $('event-title').textContent = title;
@@ -63,10 +73,12 @@ function boot() {
     banner.hidden = false;
     $('event-dismiss').onclick = () => { dismissedSig = sig; banner.hidden = true; };
   }
+  let shortShownSig = null;
+  $('short-ok').addEventListener('click', () => $('short-dialog').close());
 
   // —— 视图切换（实物台 ⇄ 电路图） ——
   // 注意：SVG 元素没有 .hidden 反射属性，必须用 toggleAttribute 才能真正隐藏
-  // 计算未被顶栏/面板/运输条/缩放按钮遮挡的可视区域（CSS 像素），供电路图取景使用
+  // 计算未被顶栏/面板/运输条遮挡的可视区域（CSS 像素），供电路图取景使用
   function stageViewport() {
     const W = innerWidth, H = innerHeight;
     const lp = $('library-panel'), rp = $('inspector-panel');
@@ -136,6 +148,15 @@ function boot() {
       $('hint-bar').textContent = type
         ? `点击台面空白处放置：${DEFS[type].label}（Esc 取消）`
         : defaultHint;
+    },
+    // 元件箱拖拽放置：落点在台面内时以指针为中心放置元件
+    onDropPlace(type, x, y) {
+      if (ui.view !== 'bench') return;
+      const p = view.toBench(x, y);
+      const geo = view.geometryOf({ type });
+      const snapG = v => Math.round(v / 20) * 20;
+      const comp = controller.addComponent(type, snapG(p.x - geo.w / 2), snapG(p.y - geo.h / 2));
+      if (comp) controller.select('comp', comp.id);
     },
     // 面板折叠/展开会改变可视区，电路图需要重新取景（等折叠动画结束后再算）
     onLayoutChange() {
