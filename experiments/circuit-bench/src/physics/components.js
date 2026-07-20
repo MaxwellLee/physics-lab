@@ -72,17 +72,19 @@ export const DEFS = {
     stamp(ctx, comp) { ctx.resistor(ctx.node('a'), ctx.node('b'), comp.params.resistance); }
   },
   rheostat: {
-    label: '滑动变阻器', kind: 'resistor', terminals: ['a', 'b', 'c'],
+    label: '滑动变阻器', kind: 'resistor', terminals: ['a', 'b', 'c', 'd'],
     params: {
       max: { label: '最大阻值', min: 5, max: 200, step: 5, def: 50, unit: 'Ω' },
       x: { label: '滑片位置', min: 0, max: 1, step: 0.01, def: 0.5 }
     },
-    // c 为滑片端子：a-c 电阻 x·Rmax，b-c 电阻 (1-x)·Rmax（“一上一下”接法）
+    // a/b 为电阻丝两端，c/d 为金属滑杆两端（杆是良导体，c-d 直通）：
+    // a-滑片 电阻 x·Rmax，b-滑片 电阻 (1-x)·Rmax（“一上一下”接法，c、d 任选一个即可）
     stamp(ctx, comp) {
       const max = comp.params.max ?? 50;
       const x = Math.min(1, Math.max(0, comp.params.x ?? 0.5));
       ctx.resistor(ctx.node('a'), ctx.node('c'), Math.max(x * max, 1e-6));
       ctx.resistor(ctx.node('b'), ctx.node('c'), Math.max((1 - x) * max, 1e-6));
+      ctx.resistor(ctx.node('c'), ctx.node('d'), 1e-3); // 金属滑杆
     }
   },
   'resistance-box': {

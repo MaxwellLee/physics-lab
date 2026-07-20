@@ -20,7 +20,8 @@ export function text(parent, str, attrs = {}) {
 
 // —— 视图世界范围：元件可摆放区域（bench 坐标）——
 export const WORLD = { x: -600, y: -400, w: 2400, h: 1500 };
-const DEFAULT_VIEW = { x: -60, y: -70, w: 1720 };
+// 默认取景：以 (800, 380) 为中心、宽 1147（比早期默认放大 1.5 倍，方便拖拽与触屏）
+const DEFAULT_VIEW = { x: 227, y: 80, w: 1147 };
 const MIN_W = 420, MAX_W = 3400;
 
 // —— 元件几何与绘制定义 ——
@@ -35,7 +36,8 @@ const line = (g, x1, y1, x2, y2, stroke, sw = 1.4, cap = 'round') =>
 const circle = (g, cx, cy, r, fill, stroke, sw = 1.2) =>
   el('circle', { cx, cy, r, fill, stroke, 'stroke-width': sw }, g);
 const label = (g, str, x, y, size = 10, fill = '#33414f', anchor = 'middle', extra = {}) =>
-  text(g, str, { x, y, 'font-size': size, fill, 'text-anchor': anchor, class: 'comp-ink', ...extra });
+  // 元件名称标签统一按 1.25 倍放大（配合默认 1.5 倍取景，保证小字清晰可读）
+  text(g, str, { x, y, 'font-size': Math.round(size * 12.5) / 10, fill, 'text-anchor': anchor, class: 'comp-ink', ...extra });
 
 export const GEOMETRY = {
   // —— 学生电源：金属机箱 + 数显窗口 + 调压旋钮 + 红黑接线柱 ——
@@ -71,29 +73,35 @@ export const GEOMETRY = {
 
   // —— 干电池组：电池盒内 1~4 节五号电池串联 ——
   'battery-pack': {
-    w: 220, h: 130,
-    terms: { pos: T(198, 44, 'pos', '+'), neg: T(198, 92, 'neg', '−') },
+    w: 250, h: 110,
+    terms: { pos: T(242, 64, 'pos', '+'), neg: T(8, 64, 'neg', '−') },
     draw(g, comp) {
-      rect(g, 14, 42, 150, 58, 6, '#343a41', '#22272c', 1.5);
-      rect(g, 20, 48, 138, 46, 4, '#262b31', '#1a1e22', 1);
+      // 电池盒：灰色塑料槽，内部首尾相接串联，两端各引出一个接线柱（左 − 右 +）
+      rect(g, 22, 40, 206, 48, 6, '#7d8791', '#5d6770', 1.5);
+      rect(g, 28, 46, 194, 36, 4, '#4d565e', '#3a4148', 1);
+      // 负极弹簧（左端）与正极接触片（右端）
+      el('path', { d: 'M 34 52 L 38 58 L 32 64 L 38 70 L 32 76 L 36 82', fill: 'none', stroke: '#c9ccd2', 'stroke-width': 2, 'stroke-linecap': 'round' }, g);
+      rect(g, 210, 50, 8, 28, 2, '#c9a35c', '#96742e', 1.2);
       el('g', { class: 'cells-g' }, g);
-      line(g, 162, 58, 192, 46, '#c0453e', 2.4);
-      line(g, 162, 86, 192, 90, '#3a3f46', 2.4);
-      label(g, '干电池组', 16, 28, 10, '#33414f', 'start');
-      text(g, '', { x: 16, y: 120, class: 'pack-volt comp-ink', 'font-size': 9, fill: '#5a6a78', 'text-anchor': 'start' });
+      // 接线柱引出片
+      line(g, 22, 64, 8, 64, '#3a3f46', 2.6);
+      line(g, 228, 64, 242, 64, '#c0453e', 2.6);
+      label(g, '干电池组', 125, 28, 10, '#33414f');
+      text(g, '', { x: 125, y: 104, class: 'pack-volt comp-ink', 'font-size': 10, fill: '#5a6a78', 'text-anchor': 'middle' });
       GEOMETRY['battery-pack'].update(g, comp);
     },
     update(g, comp) {
       const cells = Math.min(4, Math.max(1, comp.params.cells ?? 2));
       const cg = g.querySelector('.cells-g');
       cg.replaceChildren();
-      const w = 30, gap = 4, total = cells * (w + gap) - gap;
-      let x = 27 + (132 - total) / 2;
+      const x0 = 42, x1 = 208, gap = 3;
+      const w = (x1 - x0 - (cells - 1) * gap) / cells;
+      let x = x0;
       for (let i = 0; i < cells; i++) {
-        rect(cg, x, 52, w, 38, 5, '#eceae4', '#b9b2a4', 1.2);          // 电池皮
-        rect(cg, x, 52, w, 13, 5, '#d8842a', 'none');                   // 顶部品牌色环
-        rect(cg, x + w / 2 - 5, 48, 10, 5, 2, '#c9ccd2', '#9aa1a9', 1); // 正极凸头
-        label(cg, '+', x + w / 2, 80, 9, '#8a4a12');
+        rect(cg, x, 50, w, 28, 8, '#eceae4', '#b9b2a4', 1.2);          // 电池皮
+        rect(cg, x + w - 9, 50, 9, 28, 6, '#d8842a', 'none');           // 正极端色环
+        rect(cg, x + w - 2, 60, 5, 8, 2, '#c9ccd2', '#9aa1a9', 0.8);    // 正极凸头
+        label(cg, '+', x + w / 2, 68, 10, '#8a4a12');
         x += w + gap;
       }
       g.querySelector('.pack-volt').textContent = `${cells} 节串联 · ${(cells * 1.5).toFixed(1)} V`;
@@ -187,7 +195,8 @@ export const GEOMETRY = {
   // —— 滑动变阻器：瓷筒绕丝 + 金属杆滑片 ——
   rheostat: {
     w: 260, h: 140,
-    terms: { a: T(14, 72), b: T(246, 72), c: T(130, 14) },
+    // 四接线柱：a/b 为电阻丝两端（下方），c/d 为金属滑杆两端（上方左右，杆内直通）
+    terms: { a: T(14, 72), b: T(246, 72), c: T(24, 12), d: T(236, 12) },
     draw(g) {
       rect(g, 24, 86, 12, 18, 2, '#8b95a0', '#6d7782', 1);
       rect(g, 224, 86, 12, 18, 2, '#8b95a0', '#6d7782', 1);
@@ -196,18 +205,21 @@ export const GEOMETRY = {
       for (let i = 0; i < 48; i++) d += ` l 4.1 ${i % 2 ? 9 : -9}`;
       el('path', { d, fill: 'none', stroke: '#b98a4e', 'stroke-width': 1.3 }, g);
       line(g, 24, 30, 236, 30, '#aab6bf', 5);
-      line(g, 130, 30, 130, 18, '#8b95a0', 3);
+      // 滑杆两端支柱（c/d 接线柱在杆两端正上方）
+      line(g, 24, 30, 24, 16, '#8b95a0', 3);
+      line(g, 236, 30, 236, 16, '#8b95a0', 3);
       const slider = el('g', { class: 'rheo-slider' }, g);
       rect(slider, -9, 22, 18, 24, 3, '#4a5560', '#2f3942', 1.4);
       line(slider, 0, 46, 0, 56, '#2f3942', 3);
       label(g, '滑动变阻器', 130, 122, 10, '#33414f');
-      text(g, '', { x: 130, y: 135, class: 'rheo-val comp-ink', 'font-size': 8.5, fill: '#5a6a78', 'text-anchor': 'middle' });
+      text(g, '', { x: 130, y: 136, class: 'rheo-val comp-ink', 'font-size': 10, fill: '#5a6a78', 'text-anchor': 'middle' });
     },
     update(g, comp) {
       const x = comp.params.x ?? 0.5;
       const max = comp.params.max ?? 50;
       g.querySelector('.rheo-slider').setAttribute('transform', `translate(${26 + x * 208}, 0)`);
-      g.querySelector('.rheo-val').textContent = `接入 ${(x * max).toFixed(0)} Ω / ${max} Ω（一上一下接法）`;
+      // 滑片两侧阻值都标出：接 a 侧柱则接入左段，接 b 侧柱则接入右段
+      g.querySelector('.rheo-val').textContent = `左段 ${(x * max).toFixed(0)} Ω · 右段 ${((1 - x) * max).toFixed(0)} Ω（一上一下接法）`;
     }
   },
 
@@ -528,8 +540,32 @@ export class BenchView {
     this.applyViewBox();
   }
 
-  resetView() {
-    this.viewState = { ...DEFAULT_VIEW };
+  // 居中/复位视图：把全部元件框进「未被顶栏/面板/运输条遮挡」的可视区。
+  // 缩放取「默认 1.5 倍基准」与「完整容纳」的较小值——小电路够大，大电路也能绝大部分入镜。
+  resetView(vp) {
+    const rect = this.svg.getBoundingClientRect();
+    const comps = this.bench?.components ?? [];
+    if (!comps.length || !rect.width) {
+      this.viewState = { ...DEFAULT_VIEW };
+      this.applyViewBox();
+      return;
+    }
+    let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+    for (const c of comps) {
+      const g = GEOMETRY[c.type];
+      if (!g) continue;
+      x1 = Math.min(x1, c.x); y1 = Math.min(y1, c.y);
+      x2 = Math.max(x2, c.x + g.w); y2 = Math.max(y2, c.y + g.h);
+    }
+    const pad = 90;
+    x1 -= pad; y1 -= pad; x2 += pad; y2 += pad;
+    const V = vp ?? { L: rect.left, T: rect.top, R: rect.right, B: rect.bottom };
+    const availW = Math.max(200, V.R - V.L), availH = Math.max(160, V.B - V.T);
+    const sDef = rect.width / DEFAULT_VIEW.w; // 默认 1.5 倍基准（屏幕 px / 世界单位）
+    const s = Math.min(sDef, availW / (x2 - x1), availH / (y2 - y1));
+    const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
+    const pcx = (V.L + V.R) / 2 - rect.left, pcy = (V.T + V.B) / 2 - rect.top;
+    this.viewState = { x: cx - pcx / s, y: cy - pcy / s, w: rect.width / s };
     this.applyViewBox();
   }
 

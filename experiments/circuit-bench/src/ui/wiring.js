@@ -6,8 +6,8 @@ const SNAP_DIST = 30;   // 接线吸附半径（bench 坐标）
 const DRAG_TOL = 5;     // 超过视为拖动（屏幕像素）
 
 export function attachWiring(svg, view, controller, hooks) {
-  let mode = null; // 'move' | 'wire' | 'slider' | 'knob' | 'pan'
-  let dragComp = null, dragOffset = null, downPos = null, moved = false;
+  let mode = null; // 'move' | 'wire' | 'wiremove' | 'slider' | 'knob' | 'pan'
+  let dragComp = null, dragWire = null, dragOffset = null, downPos = null, moved = false;
   let panLast = null, trashShown = false;
   let wireFrom = null; // { comp, term }
   let armedTerminal = null; // 点按连线：已选中的第一个接线柱
@@ -109,11 +109,15 @@ export function attachWiring(svg, view, controller, hooks) {
       }
     }
 
-    // 4. 导线：选中
+    // 4. 导线：选中；若按住拖动，可拖进垃圾桶删除
     const wireHit = event.target.closest?.('.wire-hit');
     if (wireHit) {
       controller.select('wire', wireHit.dataset.wire);
       disarm();
+      mode = 'wiremove';
+      dragWire = wireHit.dataset.wire;
+      svg.setPointerCapture?.(event.pointerId);
+      event.preventDefault();
       return;
     }
 
@@ -152,6 +156,16 @@ export function attachWiring(svg, view, controller, hooks) {
       if (moved && !trashShown) { trashShown = true; hooks.onDragStart?.(); }
       view.moveComponent(dragComp.id, snap(p.x - dragOffset.x), snap(p.y - dragOffset.y));
       hooks.onDragHover?.(event.clientX, event.clientY);
+      return;
+    }
+    if (mode === 'wiremove' && dragWire) {
+      // 拖动导线：浮现垃圾桶并高亮被拖导线；松手位置在垃圾桶内则删除
+      if (moved && !trashShown) {
+        trashShown = true;
+        hooks.onDragStart?.();
+        view.svg.querySelector(`#wire-${dragWire}`)?.classList.add('dragging');
+      }
+      if (trashShown) hooks.onDragHover?.(event.clientX, event.clientY);
       return;
     }
     if (mode === 'slider' && dragComp) {
@@ -228,6 +242,21 @@ export function attachWiring(svg, view, controller, hooks) {
       dragComp = null; mode = null;
       return;
     }
+    if (mode === 'wiremove' && dragWire) {
+      const id = dragWire;
+      view.svg.querySelector(`#wire-${id}`)?.classList.remove('dragging');
+      if (trashShown) {
+        if (hooks.onTrashDrop?.(event.clientX, event.clientY)) {
+          hideTrash();
+          controller.removeWire(id);
+          dragWire = null; mode = null;
+          return;
+        }
+        hideTrash();
+      }
+      dragWire = null; mode = null;
+      return;
+    }
     if ((mode === 'slider' || mode === 'knob') && dragComp) {
       controller.setParam(dragComp.id, mode === 'slider' ? 'x' : 'voltage',
         mode === 'slider' ? dragComp.params.x : dragComp.params.voltage, { redraw: false });
@@ -240,7 +269,8 @@ export function attachWiring(svg, view, controller, hooks) {
   svg.addEventListener('pointercancel', () => {
     cancelWire();
     hideTrash();
-    mode = null; dragComp = null; panLast = null;
+    if (dragWire) view.svg.querySelector(`#wire-${dragWire}`)?.classList.remove('dragging');
+    mode = null; dragComp = null; dragWire = null; panLast = null;
   });
 
   // 键盘操作

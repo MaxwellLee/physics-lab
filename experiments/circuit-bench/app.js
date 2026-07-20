@@ -7,6 +7,7 @@ import { attachWiring } from './src/ui/wiring.js';
 import { Panels } from './src/ui/panels.js';
 import { attachTransport } from './src/ui/transport.js';
 import { attachDialog } from './src/ui/dialog.js';
+import { BellSound } from './src/ui/sound.js';
 import { FlowView } from './src/render/flow.js';
 import { renderSchematic } from './src/render/schematic.js';
 import { DEFS, SHORT_CURRENT } from './src/physics/components.js';
@@ -23,6 +24,9 @@ function boot() {
   const view = new BenchView($('bench-svg'));
   const flow = new FlowView(view.flowLayer);
   const schFlow = new FlowView(null); // 电路图每次全量重画，renderSch 时再 setLayer 指向新图层
+  const bellSound = new BellSound();
+  // 浏览器要求音频在用户手势后解锁
+  addEventListener('pointerdown', () => bellSound.unlock(), { once: true });
 
   // —— 事件横幅：短路 / 熔断 / 超功率 / 超量程 / 求解失败 ——
   const banner = $('event-banner');
@@ -120,6 +124,10 @@ function boot() {
       updateBanner(ctrl.results);
       flow.rebuild(ui.flowMode, ctrl.results, view, ctrl.bench);
       if (ui.view === 'schematic') renderSch();
+      // 任一电铃达到工作电流即打响
+      const bellOn = ctrl.bench.components.some(c =>
+        c.type === 'bell' && ctrl.results?.comps.get(c.id)?.active);
+      bellSound.setActive(bellOn);
     }
   });
 
@@ -192,10 +200,10 @@ function boot() {
       panels.renderPlot();
       dismissedSig = null;
       banner.hidden = true;
-      view.resetView();
+      view.resetView(stageViewport());
     },
     onZoom(factor) { view.zoomAt(factor); },
-    onZoomReset() { view.resetView(); }
+    onZoomReset() { view.resetView(stageViewport()); }
   });
   attachDialog();
 
@@ -226,7 +234,7 @@ function boot() {
   applyView();
 
   // —— 就绪闸门 ——
-  window.__cb = { controller, view, ui, flow, schFlow }; // 调试与自动化测试句柄
+  window.__cb = { controller, view, ui, flow, schFlow, bellSound }; // 调试与自动化测试句柄
   window.__circuitBenchReady = true;
   const loading = $('loading');
   loading.classList.add('done');

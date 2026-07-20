@@ -272,31 +272,31 @@ export function renderSchematic(svg, bench, view, viewport, results) {
       }
       drawLabel(labelLayer, comp, M, horizontal ? 34 : 46, labels);
     } else if (comp.type === 'rheostat') {
-      const PA = pointOf(comp.id, 'a'), PB = pointOf(comp.id, 'b'), PC = pointOf(comp.id, 'c');
+      const PA = pointOf(comp.id, 'a'), PB = pointOf(comp.id, 'b'), PC = pointOf(comp.id, 'c'), PD = pointOf(comp.id, 'd');
       const M = nudgeM({ x: snapG(comp.x + 130, 30), y: snapG(comp.y + 70, 30) }, true);
       placedM.push(M);
-      // 人教版标准画法：滑杆固定在电阻丝上方，不随节点方位镜像；c 从滑杆靠节点的一端引出，
-      // 节点在下方时由走线自己折下去，符号本体始终保持正向
-      const wiredC = isTermWired(comp.id, 'c');
-      const cLeft = wiredC && PC.x < M.x;
+      // 人教版标准画法：滑杆固定在电阻丝上方，不随节点方位镜像；c/d 分别从滑杆左/右端引出，
+      // 只画实际接线的端子，未接线的端子不引出悬空线
+      const wiredC = isTermWired(comp.id, 'c'), wiredD = isTermWired(comp.id, 'd');
       const g = el('g', { transform: `translate(${M.x}, ${M.y})` }, symLayer);
-      drawRheostat(g, comp, wiredC ? cLeft : null);
+      drawRheostat(g, comp, wiredC, wiredD);
       const sym = pushBB({ x1: M.x - HL - 8, y1: M.y - 34, x2: M.x + HL + 8, y2: M.y + 14 },
         { x1: M.x - 30, y1: M.y - 26, x2: M.x + 30, y2: M.y + 11 });
-      // 只画实际接线的端子连线，未接线的端子不引出悬空线
       if (isTermWired(comp.id, 'a')) { addReq(rootOf(comp.id, 'a'), { x: M.x - HL, y: M.y }, true, sym, null, comp.id, 'a'); bump(PA); }
       if (isTermWired(comp.id, 'b')) { addReq(rootOf(comp.id, 'b'), { x: M.x + HL, y: M.y }, true, sym, null, comp.id, 'b'); bump(PB); }
-      if (wiredC) { addReq(rootOf(comp.id, 'c'), { x: M.x + (cLeft ? -HL : HL), y: M.y - 22 }, true, sym, null, comp.id, 'c'); bump(PC); }
-      // 流向路径：沿电阻丝到滑片、再沿滑杆到 c 端；未接 c 时电流贯穿整根电阻丝
+      if (wiredC) { addReq(rootOf(comp.id, 'c'), { x: M.x - HL, y: M.y - 22 }, true, sym, null, comp.id, 'c'); bump(PC); }
+      if (wiredD) { addReq(rootOf(comp.id, 'd'), { x: M.x + HL, y: M.y - 22 }, true, sym, null, comp.id, 'd'); bump(PD); }
+      // 流向路径：沿电阻丝到滑片、再沿滑杆到接线的杆端（c 左 / d 右）；杆端都未接时电流贯穿整根电阻丝
       const tInR = (t) => termIn.get(`${comp.id}:${t}`) ?? 0;
       const slx = M.x - 28 + 56 * Math.max(0, Math.min(1, comp.params.x ?? 0.5));
       const rodY = M.y - 22;
-      if (wiredC) {
+      if (!wiredC && !wiredD) {
+        flowLinks.push({ d: polyD([{ x: M.x - HL, y: M.y }, { x: M.x + HL, y: M.y }]), I: tInR('a') });
+      } else {
         flowLinks.push({ d: polyD([{ x: M.x - HL, y: M.y }, { x: slx, y: M.y }]), I: tInR('a') });
         flowLinks.push({ d: polyD([{ x: M.x + HL, y: M.y }, { x: slx, y: M.y }]), I: tInR('b') });
-        flowLinks.push({ d: polyD([{ x: slx, y: M.y }, { x: slx, y: rodY }, { x: M.x + (cLeft ? -HL : HL), y: rodY }]), I: -tInR('c') });
-      } else {
-        flowLinks.push({ d: polyD([{ x: M.x - HL, y: M.y }, { x: M.x + HL, y: M.y }]), I: tInR('a') });
+        if (wiredC) flowLinks.push({ d: polyD([{ x: slx, y: M.y }, { x: slx, y: rodY }, { x: M.x - HL, y: rodY }]), I: -tInR('c') });
+        if (wiredD) flowLinks.push({ d: polyD([{ x: slx, y: M.y }, { x: slx, y: rodY }, { x: M.x + HL, y: rodY }]), I: -tInR('d') });
       }
       drawLabel(labelLayer, comp, M, 44, labels);
     } else if (comp.type === 'spdt-switch') {
@@ -332,14 +332,36 @@ export function renderSchematic(svg, bench, view, viewport, results) {
   // 端子方位校正：两端元件若交换左/右（上/下）引线归属能减少穿符号，则交换并重画符号
   // 拐角代价：穿过任何符号本体（内框）重罚 100，仅擦过非端点符号外框（引线区）罚 1，
   // 避免「擦球而过」与「穿心而过」被判同分，导致走线穿过元件本体
-  const cornerScore = (A, B, owners, corner) => placedBB.reduce((n, bb, i) => {
+  // 横平竖直段的交叉检测：返回 2 = 共线重叠，1 = 十字交叉，0 = 无关（端点相触不算）
+  const segCross = (p, q, r, s) => {
+    const ph = p.y === q.y, rh = r.y === s.y;
+    if (ph && rh) {
+      if (p.y !== r.y) return 0;
+      return Math.max(Math.min(p.x, q.x), Math.min(r.x, s.x)) < Math.min(Math.max(p.x, q.x), Math.max(r.x, s.x)) ? 2 : 0;
+    }
+    if (!ph && !rh) {
+      if (p.x !== r.x) return 0;
+      return Math.max(Math.min(p.y, q.y), Math.min(r.y, s.y)) < Math.min(Math.max(p.y, q.y), Math.max(r.y, s.y)) ? 2 : 0;
+    }
+    const h = ph ? [p, q] : [r, s], v = ph ? [r, s] : [p, q];
+    const inH = v[0].x > Math.min(h[0].x, h[1].x) && v[0].x < Math.max(h[0].x, h[1].x);
+    const inV = h[0].y > Math.min(v[0].y, v[1].y) && h[0].y < Math.max(v[0].y, v[1].y);
+    return inH && inV ? 1 : 0;
+  };
+  // 与「其他等势组」已画导线的交叉/重叠代价：未相连的导线不应交叉（教材图惯例）
+  const legCross = (P, Q, roots) => drawnSegs.reduce((n, [p, q, rr]) => {
+    if (!rr || !roots.length || rr.some(r => roots.includes(r))) return n;
+    const c = segCross(P, Q, p, q);
+    return n + (c === 2 ? 1.4 : c); // 共线重叠比十字交叉更糟
+  }, 0);
+  const cornerScore = (A, B, owners, corner, roots = []) => placedBB.reduce((n, bb, i) => {
     const own = owners.includes(i);
     const body = segHitsBB(A, corner, bb.b) ? 1 : 0;
     const outer = !own && segHitsBB(A, corner, bb.o) ? 1 : 0;
     const body2 = segHitsBB(corner, B, bb.b) ? 1 : 0;
     const outer2 = !own && segHitsBB(corner, B, bb.o) ? 1 : 0;
     return n + (body + body2) * 100 + outer + outer2;
-  }, 0);
+  }, legCross(A, corner, roots) * 60 + legCross(corner, B, roots) * 60);
   const minHits = (A, B, owners) => Math.min(
     cornerScore(A, B, owners, { x: A.x, y: B.y }),
     cornerScore(A, B, owners, { x: B.x, y: A.y }));
@@ -385,15 +407,16 @@ export function renderSchematic(svg, bench, view, viewport, results) {
   }
 
   // 统一绘制连线：2 连接点的组直连引线，3 个及以上的组走星形到组节点（节点处画接点）
-  // L 形拐角选择：优先不穿过任何符号（端点自身符号只豁免引线区，不豁免本体）
-  const drawSeg = (P, Q) => {
+  // L 形拐角选择：优先不穿过任何符号（端点自身符号只豁免引线区，不豁免本体），
+  // 并避开其他等势组已画的导线（未相连不交叉）
+  const drawSeg = (P, Q, roots = null) => {
     el('path', { d: `M ${P.x} ${P.y} L ${Q.x} ${Q.y}`, class: 'sch-wire' }, wireLayer);
-    drawnSegs.push([P, Q]);
+    drawnSegs.push([P, Q, roots]);
   };
   const withExit = (r) => r.ex ? { x: r.st.x + r.ex.dx, y: r.st.y + r.ex.dy } : r.st;
-  const route = (P, ST, owners, preferH = null) => {
-    const hH = cornerScore(P, ST, owners, { x: P.x, y: ST.y });
-    const hV = cornerScore(P, ST, owners, { x: ST.x, y: P.y });
+  const route = (P, ST, owners, preferH = null, roots = []) => {
+    const hH = cornerScore(P, ST, owners, { x: P.x, y: ST.y }, roots);
+    const hV = cornerScore(P, ST, owners, { x: ST.x, y: P.y }, roots);
     const horiz = hH < hV ? true : hH > hV ? false
       : (preferH ?? (Math.abs(ST.x - P.x) >= Math.abs(ST.y - P.y)));
     connect(P, ST, horiz);
@@ -412,13 +435,13 @@ export function renderSchematic(svg, bench, view, viewport, results) {
         const yy = scoreU(M.y - 70) <= scoreU(M.y + 70) ? M.y - 70 : M.y + 70;
         const d = `M ${r1.st.x} ${r1.st.y} L ${r1.st.x} ${yy} L ${r2.st.x} ${yy} L ${r2.st.x} ${r2.st.y}`;
         el('path', { d, class: 'sch-wire' }, wireLayer);
-        drawnSegs.push([r1.st, { x: r1.st.x, y: yy }], [{ x: r1.st.x, y: yy }, { x: r2.st.x, y: yy }], [{ x: r2.st.x, y: yy }, r2.st]);
+        drawnSegs.push([r1.st, { x: r1.st.x, y: yy }, [root]], [{ x: r1.st.x, y: yy }, { x: r2.st.x, y: yy }, [root]], [{ x: r2.st.x, y: yy }, r2.st, [root]]);
         flowLinks.push({ d, I: inAt(r2) });
       } else {
         const E1 = withExit(r1), E2 = withExit(r2);
-        const corner = route(E1, E2, [r1.sym, r2.sym]);
-        if (E1 !== r1.st) drawSeg(r1.st, E1);
-        if (E2 !== r2.st) drawSeg(r2.st, E2);
+        const corner = route(E1, E2, [r1.sym, r2.sym], null, [root]);
+        if (E1 !== r1.st) drawSeg(r1.st, E1, [root]);
+        if (E2 !== r2.st) drawSeg(r2.st, E2, [root]);
         // 画线方向 r1 → r2；流入 r2 端子的电流即沿此方向
         flowLinks.push({ d: polyD([r1.st, E1, corner, E2, r2.st]), I: inAt(r2) });
       }
@@ -426,8 +449,8 @@ export function renderSchematic(svg, bench, view, viewport, results) {
       const g = groups.get(root);
       for (const r of list) {
         const E = withExit(r);
-        const corner = route(g, E, [r.sym], r.h);
-        if (E !== r.st) drawSeg(E, r.st);
+        const corner = route(g, E, [r.sym], r.h, [root]);
+        if (E !== r.st) drawSeg(E, r.st, [root]);
         // 星形辐条画线方向 端子 → 组节点；流入元件的电流与此相反
         flowLinks.push({ d: polyD([r.st, E, corner, { x: g.x, y: g.y }]), I: -inAt(r) });
       }
@@ -611,7 +634,7 @@ function drawSymbol(g, comp, aTerm, uprightText = false, leadA = HL, leadB = HL)
 
 // 人教版滑动变阻器：矩形电阻丝 + 上方平行滑杆，滑片箭头按实际位置指向电阻丝。
 // c 端从滑杆靠接线节点的一端沿滑杆方向水平引出（cLeft 选左右；为 null 表示 c 未接线，不画引出）。
-function drawRheostat(g, comp, cLeft) {
+function drawRheostat(g, comp, wiredC, wiredD) {
   const line = (x1, y1, x2, y2, extra = {}) => el('line', { x1, y1, x2, y2, class: 'sch-sym', ...extra }, g);
   line(-HL, 0, -28, 0); line(28, 0, HL, 0);            // a / b 引线止于矩形边缘
   el('rect', { x: -28, y: -9, width: 56, height: 18, class: 'sch-sym' }, g);
@@ -619,7 +642,8 @@ function drawRheostat(g, comp, cLeft) {
   const px = -28 + 56 * Math.max(0, Math.min(1, comp.params.x ?? 0.5));
   line(px, -22, px, -10);                              // 滑片
   el('path', { d: `M ${px - 4} -12 L ${px} -8 L ${px + 4} -12`, fill: 'none', class: 'sch-sym' }, g); // 滑片箭头
-  if (cLeft !== null) line(cLeft ? -28 : 28, -22, cLeft ? -HL : HL, -22); // c 端沿滑杆引出
+  if (wiredC) line(-28, -22, -HL, -22);                // c 端（杆左）沿滑杆引出
+  if (wiredD) line(28, -22, HL, -22);                  // d 端（杆右）沿滑杆引出
 }
 
 function drawSpdt(g, toY) {

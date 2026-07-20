@@ -184,11 +184,12 @@ export function solveBench(bench) {
       const rac = Math.max(x * max, 1e-6), rbc = Math.max((1 - x) * max, 1e-6);
       const iac = (v[nv.a] - v[nv.c]) / rac;
       const ibc = (v[nv.b] - v[nv.c]) / rbc;
+      const irod = (v[nv.d] - v[nv.c]) / 1e-3; // 金属滑杆 c-d 直通段电流
       out.U = v[nv.a] - v[nv.b];
       out.I = Math.abs(iac) > Math.abs(ibc) ? iac : ibc;
       out.Iac = iac; out.Ibc = ibc;
       out.P = (v[nv.a] - v[nv.c]) * iac + (v[nv.b] - v[nv.c]) * ibc;
-      registerShort(cs.id, iac); registerShort(cs.id, ibc);
+      registerShort(cs.id, iac); registerShort(cs.id, ibc); registerShort(cs.id, irod);
     } else if (cs.def.kind === 'meter') {
       // 三接线柱电表：量程由实际接线的正接线柱决定（low/high 都接时按 low 处理）
       const lowUsed = wired.has(`${cs.id}:low`);

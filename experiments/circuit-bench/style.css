@@ -126,13 +126,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 .hint-bar { position: fixed; z-index: 7; left: 50%; bottom: 96px; transform: translateX(-50%); font-size: 9px; letter-spacing: .12em; color: #54687c; text-align: center; max-width: calc(100vw - 760px); line-height: 1.8; text-shadow: 0 1px 0 rgba(255, 255, 255, .5) }
 
 /* —— 运输条 —— */
-.transport { position: fixed; z-index: 18; left: 50%; bottom: 18px; transform: translateX(-50%); height: 68px; display: flex; align-items: stretch; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); backdrop-filter: blur(15px); padding: 5px; box-shadow: 0 12px 34px rgba(60, 80, 100, .2) }
-.transport button { min-width: 78px; border: 0; border-right: 1px solid var(--line); border-radius: 5px; background: transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; color: var(--text) }
+.transport { position: fixed; z-index: 18; left: 50%; bottom: 18px; transform: translateX(-50%); height: 74px; display: flex; align-items: stretch; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); backdrop-filter: blur(15px); padding: 5px; box-shadow: 0 12px 34px rgba(60, 80, 100, .2) }
+.transport button { min-width: 88px; border: 0; border-right: 1px solid var(--line); border-radius: 5px; background: transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; color: var(--text) }
 .transport button:last-child { border: 0 }
 .transport button:hover, .transport button.active { background: var(--accent-soft); color: var(--accent) }
-.transport button span { font-size: 14px }
-.transport button b { font-size: 10.5px; font-weight: 500; white-space: nowrap }
-.transport small { font-size: 8px; color: var(--muted); letter-spacing: .08em; white-space: nowrap }
+.transport button span { font-size: 16px }
+.transport button b { font-size: 12.5px; font-weight: 500; white-space: nowrap }
+.transport small { font-size: 9.5px; color: var(--muted); letter-spacing: .08em; white-space: nowrap }
 
 /* —— 底部参数条 —— */
 .param-bar { position: fixed; z-index: 18; left: 50%; bottom: 96px; transform: translateX(-50%); display: flex; align-items: center; gap: 16px; max-width: min(920px, calc(100vw - 40px)); padding: 10px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); backdrop-filter: blur(15px); box-shadow: 0 12px 34px rgba(60, 80, 100, .2) }
@@ -200,6 +200,7 @@ dialog .tip { border-top: 1px solid var(--line); padding-top: 14px; color: var(-
 .wire-casing { fill: none; stroke: #8e3532; stroke-width: 9; stroke-linecap: round; pointer-events: none }
 .wire-core { fill: none; stroke: #c9594f; stroke-width: 5.6; stroke-linecap: round; pointer-events: none }
 .wire-hit { fill: none; stroke: transparent; stroke-width: 22; cursor: pointer }
+.wire.dragging .wire-casing, .wire.dragging .wire-core { stroke-dasharray: 10 8; opacity: .55 }
 .wire.selected .wire-casing { stroke: #0a6ea3 }
 .wire.selected .wire-core { stroke: #38a8e8 }
 .wire-draft { fill: none; stroke: var(--accent); stroke-width: 3; stroke-dasharray: 8 6; pointer-events: none; opacity: .9 }
@@ -242,7 +243,7 @@ dialog .tip { border-top: 1px solid var(--line); padding-top: 14px; color: var(-
 .sch-sym { fill: none; stroke: #1a2430; stroke-width: 1.8; stroke-linecap: round; vector-effect: non-scaling-stroke }
 .sch-fill { fill: #1a2430; stroke: none }
 .sch-junction { fill: #1a2430 }
-.sch-label { fill: #46586a; font-size: 10px; text-anchor: middle; user-select: none }
+.sch-label { fill: #46586a; font-size: 11.5px; text-anchor: middle; user-select: none }
 .sch-title { fill: #33465a; font-size: 12px; letter-spacing: .1em }
 
 /* —— 加载层 —— */
@@ -276,10 +277,10 @@ dialog .tip { border-top: 1px solid var(--line); padding-top: 14px; color: var(-
   .inspector-panel { top: 76px; right: 10px; width: min(340px, calc(100vw - 20px)); max-height: 52vh; z-index: 22 }
   .library-reopen, .inspector-reopen { top: auto; bottom: 180px; transform: none }
   .hint-bar { display: none }
-  .transport { bottom: 8px; height: 74px; width: calc(100vw - 16px); justify-content: center }
+  .transport { bottom: 8px; height: 80px; width: calc(100vw - 16px); justify-content: center }
   .transport button { min-width: 0; flex: 1 }
-  .transport button b { font-size: 9px }
-  .transport small { font-size: 7px }
+  .transport button b { font-size: 10.5px }
+  .transport small { font-size: 8.5px }
   .model-info { right: 10px; bottom: 94px }
   .param-bar { bottom: 92px; flex-wrap: wrap; gap: 10px; padding: 10px 12px }
   .param-bar .param-title { border: 0; padding: 0; width: 100% }

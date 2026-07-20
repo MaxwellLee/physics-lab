@@ -144,7 +144,16 @@ try {
   check('放大按钮缩小视野宽度', parseFloat(vb1.split(' ')[2]) < parseFloat(vb0.split(' ')[2]), `${vb0} → ${vb1}`);
   await evaluate('document.getElementById("zoom-reset").click()');
   await sleep(80);
-  check('重置视图恢复初始视野', await evaluate('document.getElementById("bench-svg").getAttribute("viewBox")') === vb0);
+  // 居中=把全部元件框进可视区（不再回到固定默认视野）：验证所有元件都在 viewBox 内
+  const framed = await evaluate(`(() => {
+    const [vx, vy, vw, vh] = document.getElementById('bench-svg').getAttribute('viewBox').split(' ').map(Number);
+    const cb = window.__cb;
+    return cb.controller.bench.components.every(c => {
+      const g = cb.view.geometryOf(c);
+      return c.x >= vx - 1 && c.y >= vy - 1 && c.x + g.w <= vx + vw + 1 && c.y + g.h <= vy + vh + 1;
+    });
+  })()`);
+  check('居中后所有元件都在视野内', framed);
 
   // 10. 面板折叠/展开
   await evaluate('document.getElementById("library-close").click()');
