@@ -2,7 +2,7 @@
 // 不直接操作 DOM（view 引用由 app 注入）。
 
 import { solveBench } from '../physics/circuit.js';
-import { DEFS, defaultParams } from '../physics/components.js';
+import { DEFS, defaultParams, HORIZONTALLY_FLIPPABLE } from '../physics/components.js';
 import { findPreset, instantiatePreset, WIRE_SPECIMENS } from '../../data.js';
 
 export class Controller {
@@ -12,6 +12,7 @@ export class Controller {
     this.listeners = new Set();
     this.selected = null; // { kind: 'comp' | 'wire', id }
     this.presetId = null;
+    this.circuitAttempted = false;
     this._id = 0;
   }
 
@@ -26,7 +27,7 @@ export class Controller {
     if (!DEFS[type]) return null;
     const comp = {
       id: this.makeId('c'), type, x: Math.round(x), y: Math.round(y),
-      params: defaultParams(type)
+      params: defaultParams(type), flipped: false
     };
     if (type === 'wire-board') {
       const spec = WIRE_SPECIMENS.find(s => s.id === comp.params.specimen) ?? WIRE_SPECIMENS[1];
@@ -50,7 +51,9 @@ export class Controller {
   // aRef/bRef: { comp, term }
   addWire(aRef, bRef) {
     if (!aRef || !bRef) return null;
-    if (aRef.comp === bRef.comp && aRef.term === bRef.term) return null;
+    // 同一元件的任意两个接线柱都不能用外部导线直接互连。
+    // 元件内部的导电关系由物理模型负责，外接自环既不符合实验操作，也很容易由大触控区误触产生。
+    if (aRef.comp === bRef.comp) return null;
     const exists = this.bench.wires.some(w =>
       (w.a.comp === aRef.comp && w.a.term === aRef.term && w.b.comp === bRef.comp && w.b.term === bRef.term) ||
       (w.a.comp === bRef.comp && w.a.term === bRef.term && w.b.comp === aRef.comp && w.b.term === aRef.term));
@@ -98,10 +101,23 @@ export class Controller {
     this.solve();
   }
 
+  toggleHorizontalFlip(id) {
+    const comp = this.getComp(id);
+    if (!comp || !HORIZONTALLY_FLIPPABLE.has(comp.type)) return false;
+    comp.flipped = !comp.flipped;
+    this.emit('param-structure', { id });
+    this.solve();
+    return true;
+  }
+
   toggleSwitch(id) {
     const comp = this.getComp(id);
     if (!comp) return;
-    if (comp.type === 'switch') this.setParam(id, 'closed', !comp.params.closed, { redraw: false });
+    if (comp.type === 'switch') {
+      const willClose = !comp.params.closed;
+      if (willClose) this.circuitAttempted = true;
+      this.setParam(id, 'closed', willClose, { redraw: false });
+    }
     else if (comp.type === 'spdt-switch') this.setParam(id, 'position', comp.params.position === 'x' ? 'y' : 'x', { redraw: false });
   }
 
@@ -144,6 +160,7 @@ export class Controller {
     this.bench = { components, wires };
     this.selected = null;
     this.presetId = id;
+    this.circuitAttempted = true;
     this.emit('preset');
     this.solve();
     return true;
@@ -153,6 +170,7 @@ export class Controller {
     this.bench = { components: [], wires: [] };
     this.selected = null;
     this.presetId = null;
+    this.circuitAttempted = false;
     this.emit('preset');
     this.solve();
   }

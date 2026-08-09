@@ -12,6 +12,8 @@ export const WIRE_R = 1e-3;
 export const LEAK_R = 1e9;
 export const SHORT_CURRENT = 100; // 任何支路 |I| 超过此值（A）判定为短路
 export const OPEN_R = 1e9;
+// 这些元件具有明确的左右极性，允许学生在不改变电学身份的前提下水平翻转实物朝向。
+export const HORIZONTALLY_FLIPPABLE = new Set(['battery-pack', 'diode', 'led']);
 
 // 非线性灯泡经验模型：R(U) = R0 * (1 + K * (U / Ue)^2)
 // 标定：额定电压 Ue 下 R(Ue) = Ue / Ie（即 R0 = (Ue/Ie) / (1+K)，K=9 时热态约为冷态 10 倍），
@@ -75,7 +77,7 @@ export const DEFS = {
     label: '滑动变阻器', kind: 'resistor', terminals: ['a', 'b', 'c', 'd'],
     params: {
       max: { label: '最大阻值', min: 5, max: 200, step: 5, def: 50, unit: 'Ω' },
-      x: { label: '滑片位置', min: 0, max: 1, step: 0.01, def: 0.5 }
+      x: { label: '真实电阻', min: 0, max: 1, step: 0.01, def: 0.5 }
     },
     // a/b 为电阻丝两端，c/d 为金属滑杆两端（杆是良导体，c-d 直通）：
     // a-滑片 电阻 x·Rmax，b-滑片 电阻 (1-x)·Rmax（“一上一下”接法，c、d 任选一个即可）
@@ -187,7 +189,7 @@ export const DEFS = {
     label: '电铃', kind: 'load', terminals: ['a', 'b'],
     params: {
       resistance: { label: '电阻', min: 5, max: 100, step: 5, def: 20, unit: 'Ω' },
-      threshold: { label: '工作电流', min: 0.02, max: 0.5, step: 0.02, def: 0.1, unit: 'A' }
+      threshold: { label: '动作电流', min: 0.005, max: 0.2, step: 0.005, def: 0.005, unit: 'A' }
     },
     stamp(ctx, comp) { ctx.resistor(ctx.node('a'), ctx.node('b'), comp.params.resistance); }
   },
@@ -195,7 +197,7 @@ export const DEFS = {
     label: '电动机', kind: 'load', terminals: ['a', 'b'],
     params: {
       resistance: { label: '电阻', min: 1, max: 50, step: 1, def: 8, unit: 'Ω' },
-      threshold: { label: '工作电流', min: 0.02, max: 0.5, step: 0.02, def: 0.1, unit: 'A' }
+      threshold: { label: '启动电流', min: 0.005, max: 0.5, step: 0.005, def: 0.005, unit: 'A' }
     },
     stamp(ctx, comp) { ctx.resistor(ctx.node('a'), ctx.node('b'), comp.params.resistance); }
   }

@@ -4,6 +4,9 @@
 const GRID = 20;
 const SNAP_DIST = 30;   // 接线吸附半径（bench 坐标）
 const DRAG_TOL = 5;     // 超过视为拖动（屏幕像素）
+const touchMode = () =>
+  (globalThis.navigator?.maxTouchPoints ?? 0) > 0 ||
+  globalThis.matchMedia?.('(pointer: coarse)').matches;
 
 export function attachWiring(svg, view, controller, hooks) {
   let mode = null; // 'move' | 'wire' | 'wiremove' | 'slider' | 'knob' | 'pan'
@@ -12,6 +15,8 @@ export function attachWiring(svg, view, controller, hooks) {
   let wireFrom = null; // { comp, term }
   let armedTerminal = null; // 点按连线：已选中的第一个接线柱
   let solveScheduled = false;
+  const activeTouches = new Map();
+  let pinch = null, pinchActive = false;
 
   const scheduleSolve = () => {
     if (solveScheduled) return;
@@ -24,13 +29,53 @@ export function attachWiring(svg, view, controller, hooks) {
     if (!n) return null;
     return { comp: n.dataset.comp, term: n.dataset.term };
   };
+  const terminalAt = (event) => {
+    let best = null;
+    // 起线必须更靠近可见接线柱；拖线结束仍由 nearestTerminal 提供较宽松的吸附。
+    let bestDistance = touchMode() ? 20 : 22;
+    for (const node of svg.querySelectorAll('.terminal')) {
+      const rect = node.getBoundingClientRect();
+      const distance = Math.hypot(event.clientX - (rect.left + rect.width / 2), event.clientY - (rect.top + rect.height / 2));
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = { comp: node.dataset.comp, term: node.dataset.term };
+      }
+    }
+    return best ?? terminalOf(event.target);
+  };
+  const wireAt = (event) =>
+    event.target.closest?.('.wire-hit') ??
+    document.elementsFromPoint(event.clientX, event.clientY)
+      .find(node => node.classList?.contains('wire-hit')) ??
+    null;
+  const componentAt = (event) => {
+    let best = null;
+    for (const node of svg.querySelectorAll('.comp')) {
+      const hit = node.querySelector('.comp-hit')?.getBoundingClientRect() ?? node.getBoundingClientRect();
+      if (event.clientX < hit.left || event.clientX > hit.right || event.clientY < hit.top || event.clientY > hit.bottom) continue;
+      const area = hit.width * hit.height;
+      if (!best || area < best.area) best = { node, rect: hit, area };
+    }
+    return best;
+  };
+  const isCentralComponentTap = (hit, event) => {
+    if (!hit) return false;
+    const insetX = Math.min(18, hit.rect.width * 0.28);
+    const insetY = Math.min(15, hit.rect.height * 0.24);
+    return event.clientX >= hit.rect.left + insetX && event.clientX <= hit.rect.right - insetX &&
+      event.clientY >= hit.rect.top + insetY && event.clientY <= hit.rect.bottom - insetY;
+  };
 
   const nearestTerminal = (p, exclude) => {
-    let best = null, bestD = SNAP_DIST;
+    const rect = svg.getBoundingClientRect();
+    const worldPerPx = view.viewState.w / Math.max(1, rect.width);
+    let best = null, bestD = (touchMode() ? 34 : 22) * worldPerPx;
     for (const comp of controller.bench.components) {
+      // 从某个元件开始拖线时，不把该元件的其他接线柱作为吸附目标。
+      // 这样既保留 48 px 级触控命中区，也不会因接线柱靠得近而误吸附成自连接。
+      if (exclude?.comp === comp.id) continue;
       const geo = view.geometryOf(comp);
       for (const term of Object.keys(geo.terms)) {
-        if (exclude && exclude.comp === comp.id && exclude.term === term) continue;
         const tp = view.terminalPos(comp.id, term);
         const d = Math.hypot(tp.x - p.x, tp.y - p.y);
         if (d < bestD) { bestD = d; best = { comp: comp.id, term }; }
@@ -51,37 +96,113 @@ export function attachWiring(svg, view, controller, hooks) {
     view.clearTerminalStates();
   };
 
+  const rejectSelfConnection = (from, target) => {
+    if (!from || !target || from.comp !== target.comp) return false;
+    view.flashInvalidConnection(from.comp);
+    hooks.onInvalidWire?.('同一元件的接线柱不能用外部导线直接互连');
+    return true;
+  };
+
   const hideTrash = () => {
     if (trashShown) { trashShown = false; hooks.onDragEnd?.(); }
   };
 
   svg.addEventListener('pointerdown', (event) => {
     if (event.button !== undefined && event.button !== 0) return;
+    if (event.pointerType === 'touch') {
+      activeTouches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (activeTouches.size === 2) {
+        const [a, b] = [...activeTouches.values()];
+        pinch = {
+          distance: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+          x: (a.x + b.x) / 2,
+          y: (a.y + b.y) / 2
+        };
+        pinchActive = true;
+        cancelWire();
+        hideTrash();
+        mode = 'pinch';
+        dragComp = null; dragWire = null; panLast = null;
+        svg.setPointerCapture?.(event.pointerId);
+        event.preventDefault();
+        return;
+      }
+    }
     const p = view.toBench(event.clientX, event.clientY);
     downPos = { x: event.clientX, y: event.clientY };
     moved = false;
 
     // 1. 接线柱：开始拖线（若已有点按连线的起点，则直接完成连线）
-    const term = terminalOf(event.target);
+    const componentHit = componentAt(event);
+    const wireHit = wireAt(event);
+    const directNode = event.target.closest?.('.terminal-hit, .terminal');
+    let directTerm = terminalAt(event);
+    // On compact touch layouts, transparent hit circles from adjacent meter
+    // terminals can overlap. Use the nearest visible terminal centre instead
+    // of DOM paint order whenever the hit came from an enlarged touch target.
+    if (directNode?.classList.contains('terminal-hit')) {
+      directTerm = terminalAt(event);
+    }
+    const directTerminalDistance = (() => {
+      if (!directTerm) return Infinity;
+      const node = svg.querySelector(`.terminal[data-comp="${CSS.escape(directTerm.comp)}"][data-term="${CSS.escape(directTerm.term)}"]`);
+      const rect = node?.getBoundingClientRect();
+      return rect
+        ? Math.hypot(event.clientX - (rect.left + rect.width / 2), event.clientY - (rect.top + rect.height / 2))
+        : Infinity;
+    })();
+    const directHitNearVisiblePost = directTerminalDistance <= (touchMode() ? 12 : 10);
+    // 透明触控圈可能覆盖紧贴电表底部的导线。点在接线柱圆心附近仍接线；
+    // 点在触控圈外缘且下方确有导线时，把操作交给导线选择/删除。
+    const transparentTermOverWire =
+      !!directTerm && directNode?.classList.contains('terminal-hit') && !!wireHit && !directHitNearVisiblePost;
+    const transparentTermOverComponent =
+      !!directTerm && directNode?.classList.contains('terminal-hit') &&
+      isCentralComponentTap(componentHit, event) && !directHitNearVisiblePost;
+    if (transparentTermOverWire || transparentTermOverComponent) directTerm = null;
+    // 真实点中接线柱时优先接线；只有“靠近接线柱”的模糊命中才让元件中心点击优先。
+    const term = transparentTermOverWire || transparentTermOverComponent
+      ? null
+      : directTerm ?? (isCentralComponentTap(componentHit, event) ? null : terminalAt(event));
     if (term) {
-      if (armedTerminal && !(term.comp === armedTerminal.comp && term.term === armedTerminal.term)) {
-        controller.addWire(armedTerminal, term);
-        disarm();
-        event.preventDefault();
-        return;
+      if (armedTerminal) {
+        if (term.comp === armedTerminal.comp && term.term !== armedTerminal.term) {
+          rejectSelfConnection(armedTerminal, term);
+          view.setTerminalArmed(armedTerminal.comp, armedTerminal.term);
+          event.preventDefault();
+          return;
+        }
+        if (!(term.comp === armedTerminal.comp && term.term === armedTerminal.term)) {
+          controller.addWire(armedTerminal, term);
+          disarm();
+          event.preventDefault();
+          return;
+        }
       }
       disarm();
       mode = 'wire';
       wireFrom = term;
       view.draftFrom = view.terminalPos(term.comp, term.term);
       view.showDraft(view.draftFrom, p);
+      view.setTerminalArmed(term.comp, term.term);
       svg.setPointerCapture?.(event.pointerId);
       event.preventDefault();
       return;
     }
 
-    // 2. 滑片 / 旋钮 / 元件本体
-    const compEl = event.target.closest?.('.comp');
+    // 2. 导线：位于元件上方，必须先于元件本体判定，否则贴着电表底部的故障导线无法选中。
+    if (wireHit) {
+      controller.select('wire', wireHit.dataset.wire);
+      disarm();
+      mode = 'wiremove';
+      dragWire = wireHit.dataset.wire;
+      svg.setPointerCapture?.(event.pointerId);
+      event.preventDefault();
+      return;
+    }
+
+    // 3. 滑片 / 旋钮 / 元件本体
+    const compEl = event.target.closest?.('.comp') ?? componentHit?.node;
     if (compEl) {
       const id = compEl.id.replace(/^comp-/, '');
       const comp = controller.getComp(id);
@@ -99,7 +220,7 @@ export function attachWiring(svg, view, controller, hooks) {
           event.preventDefault();
           return;
         }
-        // 3. 元件本体：拖动（移动超过阈值后显示垃圾桶）
+        // 元件本体：拖动（移动超过阈值后显示垃圾桶）
         mode = 'move';
         dragComp = comp;
         dragOffset = { x: p.x - comp.x, y: p.y - comp.y };
@@ -109,24 +230,14 @@ export function attachWiring(svg, view, controller, hooks) {
       }
     }
 
-    // 4. 导线：选中；若按住拖动，可拖进垃圾桶删除
-    const wireHit = event.target.closest?.('.wire-hit');
-    if (wireHit) {
-      controller.select('wire', wireHit.dataset.wire);
-      disarm();
-      mode = 'wiremove';
-      dragWire = wireHit.dataset.wire;
-      svg.setPointerCapture?.(event.pointerId);
-      event.preventDefault();
-      return;
-    }
-
-    // 5. 空台面：放置模式优先，否则进入画布平移
+    // 4. 空台面：放置模式优先，否则进入画布平移
     const placeType = hooks.getPlacementType?.();
     if (placeType) {
-      const comp = controller.addComponent(placeType, snap(p.x - 60), snap(p.y - 40));
+      const geo = view.geometryOf({ type: placeType });
+      const comp = controller.addComponent(placeType, snap(p.x - geo.w / 2), snap(p.y - geo.h / 2));
       hooks.clearPlacement?.();
-      if (comp) controller.select('comp', comp.id);
+      // 新放入元件只完成放置，不立刻弹参数；再次点选元件时才显示参数与删除。
+      if (comp) controller.select(null);
       return;
     }
     disarm();
@@ -138,8 +249,24 @@ export function attachWiring(svg, view, controller, hooks) {
   });
 
   svg.addEventListener('pointermove', (event) => {
+    if (event.pointerType === 'touch' && activeTouches.has(event.pointerId)) {
+      activeTouches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    }
+    if (pinchActive) {
+      if (activeTouches.size >= 2 && pinch) {
+        const [a, b] = [...activeTouches.values()];
+        const distance = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+        const x = (a.x + b.x) / 2;
+        const y = (a.y + b.y) / 2;
+        const factor = Math.max(.72, Math.min(1.38, pinch.distance / distance));
+        view.zoomAt(factor, x, y);
+        pinch = { distance, x, y };
+      }
+      return;
+    }
     const p = view.toBench(event.clientX, event.clientY);
-    if (downPos && Math.hypot(event.clientX - downPos.x, event.clientY - downPos.y) > DRAG_TOL) moved = true;
+    const dragTol = touchMode() ? 11 : DRAG_TOL;
+    if (downPos && Math.hypot(event.clientX - downPos.x, event.clientY - downPos.y) > dragTol) moved = true;
 
     if (mode === 'pan' && panLast) {
       view.panBy(event.clientX - panLast.x, event.clientY - panLast.y);
@@ -184,6 +311,12 @@ export function attachWiring(svg, view, controller, hooks) {
   });
 
   svg.addEventListener('pointerup', (event) => {
+    if (event.pointerType === 'touch') activeTouches.delete(event.pointerId);
+    if (pinchActive) {
+      if (activeTouches.size < 2) { mode = null; pinch = null; }
+      if (activeTouches.size === 0) pinchActive = false;
+      return;
+    }
     const p = view.toBench(event.clientX, event.clientY);
 
     if (mode === 'pan') {
@@ -193,9 +326,12 @@ export function attachWiring(svg, view, controller, hooks) {
 
     if (mode === 'wire' && wireFrom) {
       const from = wireFrom;
-      const target = nearestTerminal(p, from) ?? terminalOf(event.target);
+      const target = nearestTerminal(p, from) ?? terminalAt(event);
       cancelWire();
-      if (target && !(target.comp === from.comp && target.term === from.term)) {
+      if (target && target.comp === from.comp && target.term !== from.term) {
+        rejectSelfConnection(from, target);
+        disarm();
+      } else if (target && target.comp !== from.comp) {
         controller.addWire(from, target);
         disarm();
       } else if (!moved) {
@@ -208,8 +344,13 @@ export function attachWiring(svg, view, controller, hooks) {
 
     if (armedTerminal) {
       // 点按连线：第二个接线柱
-      const term = terminalOf(event.target);
-      if (term && !(term.comp === armedTerminal.comp && term.term === armedTerminal.term)) {
+      const term = terminalAt(event);
+      if (term && term.comp === armedTerminal.comp && term.term !== armedTerminal.term) {
+        rejectSelfConnection(armedTerminal, term);
+        view.setTerminalArmed(armedTerminal.comp, armedTerminal.term);
+        return;
+      }
+      if (term && term.comp !== armedTerminal.comp) {
         controller.addWire(armedTerminal, term);
         disarm();
         return;
@@ -266,7 +407,9 @@ export function attachWiring(svg, view, controller, hooks) {
     mode = null; dragComp = null;
   });
 
-  svg.addEventListener('pointercancel', () => {
+  svg.addEventListener('pointercancel', (event) => {
+    if (event.pointerType === 'touch') activeTouches.delete(event.pointerId);
+    if (activeTouches.size === 0) { pinchActive = false; pinch = null; }
     cancelWire();
     hideTrash();
     if (dragWire) view.svg.querySelector(`#wire-${dragWire}`)?.classList.remove('dragging');
@@ -275,7 +418,7 @@ export function attachWiring(svg, view, controller, hooks) {
 
   // 键盘操作
   window.addEventListener('keydown', (event) => {
-    if (event.target.matches('input, select, textarea')) return;
+    if (event.target?.matches?.('input, select, textarea')) return;
     if (event.key === 'Escape') {
       if (armedTerminal) disarm();
       else if (hooks.getPlacementType?.()) hooks.clearPlacement?.();

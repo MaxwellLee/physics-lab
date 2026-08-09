@@ -5,7 +5,7 @@
 
 import { solveMNA } from './mna.js';
 import {
-  DEFS, WIRE_R, LEAK_R, SHORT_CURRENT,
+  DEFS, WIRE_R, LEAK_R, SHORT_CURRENT, OPEN_R,
   nlBulbColdR, nlBulbResistance
 } from './components.js';
 
@@ -51,6 +51,17 @@ export function solveBench(bench) {
     wired.add(`${w.a.comp}:${w.a.term}`);
     wired.add(`${w.b.comp}:${w.b.term}`);
   }
+  const meterConnection = (cs) => {
+    const minusUsed = wired.has(`${cs.id}:minus`);
+    const lowUsed = wired.has(`${cs.id}:low`);
+    const highUsed = wired.has(`${cs.id}:high`);
+    const positiveCount = Number(lowUsed) + Number(highUsed);
+    return {
+      minusUsed, lowUsed, highUsed, positiveCount,
+      valid: minusUsed && positiveCount === 1,
+      active: lowUsed && !highUsed ? 'low' : highUsed && !lowUsed ? 'high' : null
+    };
+  };
 
   // 3. 跨迭代状态：二极管导通态、非线性灯泡当前电阻
   const state = {
@@ -79,6 +90,16 @@ export function solveBench(bench) {
     for (const cs of compState.values()) {
       if (cs.def.kind === 'source') {
         vSources.push({ p: cs.nodes.pos, n: cs.nodes.neg, e: cs.def.emf(cs.params), id: cs.id });
+        continue;
+      }
+      if (cs.def.kind === 'meter') {
+        // 学校三接线柱电表必须使用公共负柱 + 恰好一个正量程柱。
+        // 接法无效时不把内部量程支路接入求解，避免“两正柱”或漏接负柱仍产生假读数。
+        const connection = meterConnection(cs);
+        if (connection.valid) {
+          const resistance = cs.type === 'voltmeter' ? OPEN_R : WIRE_R;
+          resistors.push({ a: cs.nodes[connection.active], b: cs.nodes.minus, r: resistance, meterId: cs.id });
+        }
         continue;
       }
       if (cs.type === 'fuse' && blownNow.has(cs.id)) continue; // 已熔断：开路
@@ -191,30 +212,48 @@ export function solveBench(bench) {
       out.P = (v[nv.a] - v[nv.c]) * iac + (v[nv.b] - v[nv.c]) * ibc;
       registerShort(cs.id, iac); registerShort(cs.id, ibc); registerShort(cs.id, irod);
     } else if (cs.def.kind === 'meter') {
-      // 三接线柱电表：量程由实际接线的正接线柱决定（low/high 都接时按 low 处理）
-      const lowUsed = wired.has(`${cs.id}:low`);
-      const highUsed = wired.has(`${cs.id}:high`);
-      const t = lowUsed ? 'low' : (highUsed ? 'high' : 'low');
+      const connection = meterConnection(cs);
+      const { lowUsed, highUsed } = connection;
+      const t = connection.active ?? (lowUsed ? 'low' : highUsed ? 'high' : 'low');
       const range = cs.def.ranges[t];
       out.range = range;
+      out.connected = connection.valid;
       out.rangeLabel = cs.type === 'galvanometer'
         ? (t === 'low' ? 'G0 挡' : 'G1 挡')
         : `0–${cs.def.termLabels[t]} ${cs.type === 'voltmeter' ? 'V' : 'A'}`;
-      if (cs.type === 'voltmeter') {
+      if (!connection.valid) {
+        out.reading = 0;
+        out.I = 0;
+        out.U = 0;
+        out.P = 0;
+        out.rangeLabel = null;
+        const usedCount = Number(connection.minusUsed) + connection.positiveCount;
+        out.connectionError = usedCount >= 2;
+        if (usedCount >= 2) {
+          events.push({
+            type: 'meter-terminal',
+            id: cs.id,
+            meter: cs.type,
+            minusUsed: connection.minusUsed,
+            lowUsed,
+            highUsed,
+            wireIds: meterWireIds(bench, cs.id)
+          });
+        }
+      } else if (cs.type === 'voltmeter') {
         out.reading = v[nv[t]] - v[nv.minus];
         out.I = 0;
         out.U = out.reading;
         out.P = 0;
       } else {
-        const iLow = (v[nv.low] - v[nv.minus]) / WIRE_R;
-        const iHigh = (v[nv.high] - v[nv.minus]) / WIRE_R;
-        out.reading = (lowUsed && highUsed) ? iLow + iHigh : (t === 'low' ? iLow : iHigh);
+        const iActive = (v[nv[t]] - v[nv.minus]) / WIRE_R;
+        out.reading = iActive;
         out.I = out.reading;
         out.U = v[nv[t]] - v[nv.minus];
         out.P = out.U * out.I;
         registerShort(cs.id, out.reading ?? 0);
       }
-      if (Math.abs(out.reading ?? 0) > range) {
+      if (connection.valid && Math.abs(out.reading ?? 0) > range) {
         events.push({ type: 'overrange', id: cs.id, reading: out.reading, range, meter: cs.type });
         out.overrange = true;
       }
@@ -233,12 +272,23 @@ export function solveBench(bench) {
       if (cs.type === 'diode' || cs.type === 'led') {
         out.conducting = state.diodeOn.get(cs.id) && out.I > -1e-9;
         if (cs.type === 'led') out.lit = out.conducting && out.I >= (cs.params.litThreshold ?? 0.01);
+        const anodeWired = wired.has(`${cs.id}:an`);
+        const cathodeWired = wired.has(`${cs.id}:ka`);
+        if (anodeWired && cathodeWired && out.U < -0.05) {
+          events.push({
+            type: 'diode-reversed', id: cs.id, diode: cs.type,
+            voltage: out.U, wireIds: meterWireIds(bench, cs.id)
+          });
+        }
       }
       if (cs.type === 'bulb' || cs.type === 'bulb-nl') {
         const ratedP = cs.type === 'bulb'
           ? (cs.params.ratedP ?? 1)
           : (cs.params.ratedU ?? 2.5) * (cs.params.ratedI ?? 0.3);
-        out.brightness = Math.max(0, Math.min(1.3, out.P / Math.max(ratedP, 1e-9)));
+        // 人眼对亮度感知近似非线性：低于额定功率时使用平方根映射，
+        // 让“已经有电流但较暗”的灯泡仍清晰可见；零功率仍严格不亮。
+        const powerRatio = Math.max(0, out.P / Math.max(ratedP, 1e-9));
+        out.brightness = Math.max(0, Math.min(1.3, Math.sqrt(powerRatio)));
         if (out.P > 2 * ratedP) events.push({ type: 'overpower', id: cs.id, power: out.P, ratedP });
         if (cs.type === 'bulb-nl') out.rNow = state.bulbR.get(cs.id);
       }
@@ -299,6 +349,8 @@ export function solveBench(bench) {
     if (registerShort(w.id, i)) shortIds.push(w.id);
   }
 
+  diagnoseMeters(bench, compState, results, events, meterConnection);
+
   if (shorted) {
     events.unshift({ type: 'short', ids: shortIds });
   }
@@ -309,6 +361,98 @@ export function solveBench(bench) {
     blown: [...blownNow],
     converged
   };
+}
+
+function meterWireIds(bench, meterId) {
+  return bench.wires
+    .filter(w => w.a.comp === meterId || w.b.comp === meterId)
+    .map(w => w.id);
+}
+
+// 电表教学诊断建立在“导线等势结点 + 元件支路”拓扑上，不改变 MNA 求解结果。
+// 目标是识别初中实验中最常见、且肉眼容易误判的三类错误：
+// 反接、把电流表并联、把电压表串联。
+function diagnoseMeters(bench, compState, results, events, meterConnection) {
+  const parent = new Map();
+  const find = (x) => {
+    if (!parent.has(x)) parent.set(x, x);
+    let root = x;
+    while (parent.get(root) !== root) root = parent.get(root);
+    let cursor = x;
+    while (parent.get(cursor) !== cursor) {
+      const next = parent.get(cursor);
+      parent.set(cursor, root);
+      cursor = next;
+    }
+    return root;
+  };
+  const union = (a, b) => parent.set(find(b), find(a));
+  const key = (id, term) => `${id}:${term}`;
+  for (const cs of compState.values()) {
+    for (const term of cs.def.terminals) find(key(cs.id, term));
+  }
+  for (const wire of bench.wires) {
+    union(key(wire.a.comp, wire.a.term), key(wire.b.comp, wire.b.term));
+  }
+
+  const edges = [];
+  const addEdge = (cs, a, b) => edges.push({
+    id: cs.id, type: cs.type,
+    a: find(key(cs.id, a)), b: find(key(cs.id, b))
+  });
+  for (const cs of compState.values()) {
+    if (cs.def.kind === 'source') addEdge(cs, 'pos', 'neg');
+    else if (cs.def.kind === 'meter') {
+      const connection = meterConnection(cs);
+      if (connection.valid) addEdge(cs, connection.active, 'minus');
+    } else if (cs.type === 'rheostat') {
+      addEdge(cs, 'a', 'c'); addEdge(cs, 'b', 'c'); addEdge(cs, 'c', 'd');
+    } else if (cs.type === 'spdt-switch') {
+      addEdge(cs, 'com', cs.params.position === 'y' ? 'y' : 'x');
+    } else if (cs.type === 'switch') {
+      if (cs.params.closed) addEdge(cs, 'a', 'b');
+    } else if (cs.type === 'diode' || cs.type === 'led') {
+      addEdge(cs, 'an', 'ka');
+    } else if (cs.def.terminals.includes('a') && cs.def.terminals.includes('b')) {
+      addEdge(cs, 'a', 'b');
+    }
+  }
+
+  const degree = new Map();
+  for (const edge of edges) {
+    degree.set(edge.a, (degree.get(edge.a) ?? 0) + 1);
+    degree.set(edge.b, (degree.get(edge.b) ?? 0) + 1);
+  }
+  const samePair = (x, y) =>
+    (x.a === y.a && x.b === y.b) || (x.a === y.b && x.b === y.a);
+
+  for (const cs of compState.values()) {
+    if (cs.type !== 'ammeter' && cs.type !== 'voltmeter' && cs.type !== 'galvanometer') continue;
+    const connection = meterConnection(cs);
+    if (!connection.valid) continue;
+    const result = results.get(cs.id);
+    if (!result) continue;
+    const edge = edges.find(item => item.id === cs.id);
+    if (!edge) continue;
+    const wireIds = meterWireIds(bench, cs.id);
+
+    if ((result.reading ?? 0) < -1e-6) {
+      result.reversed = true;
+      events.push({ type: 'meter-reversed', id: cs.id, meter: cs.type, reading: result.reading, wireIds });
+    }
+
+    const exactParallel = edges.some(item => item.id !== cs.id && samePair(item, edge));
+    const bothJunctions = (degree.get(edge.a) ?? 0) >= 3 && (degree.get(edge.b) ?? 0) >= 3;
+    if ((cs.type === 'ammeter' || cs.type === 'galvanometer') && (exactParallel || bothJunctions)) {
+      events.push({ type: 'ammeter-parallel', id: cs.id, meter: cs.type, wireIds });
+      continue;
+    }
+    // 串联支路的两个结点都只有“进、出”两条支路；正确并联至少会与被测对象共享一对结点。
+    if (cs.type === 'voltmeter' && !exactParallel &&
+      (degree.get(edge.a) ?? 0) === 2 && (degree.get(edge.b) ?? 0) === 2) {
+      events.push({ type: 'voltmeter-series', id: cs.id, wireIds });
+    }
+  }
 }
 
 function effectiveResistance(cs, state, blownNow) {
