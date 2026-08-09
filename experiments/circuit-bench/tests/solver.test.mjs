@@ -202,6 +202,7 @@ test('T11 电流表反接读数为负', () => {
   };
   const out = solveBench(bench);
   near(out.comps.get(a.id).reading, -0.3, 0.01, '反接读数应为负');
+  assert.ok(out.events.some(e => e.type === 'meter-reversed' && e.id === a.id), '反接应报告极性错误');
 });
 
 // T12 电压表并在断开开关两端：读数≈电源电压
@@ -234,10 +235,43 @@ test('T13 电压表串联的错误接法', () => {
   const out = solveBench(bench);
   assert.ok(Math.abs(out.comps.get(b.id).I) < 1e-6, '灯泡应几乎无电流');
   near(out.comps.get(vm.id).reading, 3, 0.01, '电压表应近似读出电源电压');
+  assert.ok(out.events.some(e => e.type === 'voltmeter-series' && e.id === vm.id), '电压表串联应给出教学提示');
 });
 
-// T14 滑动变阻器：x=0.5、max=50 → a-c 间 25Ω
-test('T14 滑动变阻器分阻', () => {
+// T14 电表接线规则：两个正量程柱不能代替公共负柱
+test('T14 电压表两个正接线柱无有效读数', () => {
+  const s = comp('student-supply', { voltage: 3 });
+  const vm = comp('voltmeter', {});
+  const bench = {
+    components: [s, vm],
+    wires: [wire(s.id, 'pos', vm.id, 'low'), wire(vm.id, 'high', s.id, 'neg')]
+  };
+  const out = solveBench(bench);
+  assert.equal(out.comps.get(vm.id).connected, false, '两个正柱不构成有效电表接法');
+  assert.equal(out.comps.get(vm.id).reading, 0, '无效接法不应产生假读数');
+  assert.ok(out.events.some(e => e.type === 'meter-terminal' && e.id === vm.id), '应报告接线柱选择错误');
+});
+
+// T15 电流表并联在灯泡两端：理想内阻为 0，应识别为并联短路
+test('T15 电流表并联故障诊断', () => {
+  const s = comp('student-supply', { voltage: 3 });
+  const b = comp('bulb', { resistance: 10, ratedP: 1 });
+  const a = comp('ammeter', {});
+  const bench = {
+    components: [s, b, a],
+    wires: [
+      wire(s.id, 'pos', b.id, 'a'), wire(b.id, 'b', s.id, 'neg'),
+      wire(a.id, 'low', b.id, 'a'), wire(a.id, 'minus', b.id, 'b')
+    ]
+  };
+  const out = solveBench(bench);
+  assert.ok(out.events.some(e => e.type === 'ammeter-parallel' && e.id === a.id), '应报告电流表并联短路');
+  assert.ok(out.events.some(e => e.type === 'short'), '理想电流表并联应同时满足短路判据');
+  assert.equal(out.comps.get(b.id).brightness, 0, '灯泡被电流表短接后不应发光');
+});
+
+// T16 滑动变阻器：x=0.5、max=50 → a-c 间 25Ω
+test('T16 滑动变阻器分阻', () => {
   const s = comp('student-supply', { voltage: 3 });
   const rh = comp('rheostat', { max: 50, x: 0.5 });
   const bench = {
@@ -248,8 +282,8 @@ test('T14 滑动变阻器分阻', () => {
   near(out.comps.get(rh.id).Iac, 0.12, 0.01, 'a-c 支路电流 3/25');
 });
 
-// T16 两个不同电压电源并联：环流巨大 → 短路事件（安全演示）
-test('T16 异压电源并联环流', () => {
+// T17 两个不同电压电源并联：环流巨大 → 短路事件（安全演示）
+test('T17 异压电源并联环流', () => {
   const s1 = comp('battery-pack', { cells: 4 }); // 6V
   const s2 = comp('battery-pack', { cells: 2 }); // 3V
   const bench = {
@@ -260,8 +294,8 @@ test('T16 异压电源并联环流', () => {
   assert.ok(out.events.some(e => e.type === 'short'), '应报告短路事件');
 });
 
-// T17 电势范围：3V 电源单回路，电势应在 [0, 3] 附近
-test('T17 节点电势范围', () => {
+// T18 电势范围：3V 电源单回路，电势应在 [0, 3] 附近
+test('T18 节点电势范围', () => {
   const s = comp('student-supply', { voltage: 3 });
   const r = comp('resistor', { resistance: 10 });
   const bench = {
@@ -276,8 +310,8 @@ test('T17 节点电势范围', () => {
   nearAbs(out.v[out.nodeOf.get(`${r.id}:b`)], 0, 0.005, '电阻负端电势');
 });
 
-// T18 全部预设：实例化（默认参数合并）+ 求解行为抽查
-test('T18 预设实例化与物理行为', () => {
+// T19 全部预设：实例化（默认参数合并）+ 求解行为抽查
+test('T19 预设实例化与物理行为', () => {
   assert.equal(PRESETS.length, 15, '预设数量');
   for (const preset of PRESETS) {
     const bench = instantiatePreset(preset, (p, i) => `${preset.id}-${p}${i}`);
@@ -302,6 +336,21 @@ test('T18 预设实例化与物理行为', () => {
   assert.ok([...revOut.comps.values()].find(r => r.reading !== undefined).reading < 0, 'bad-ammeter-reversed 读数应为负');
   const vmSeries = bad('bad-voltmeter-series');
   near([...vmSeries.comps.values()].find(r => r.reading !== undefined).reading, 3, 0.01, 'bad-voltmeter-series 电压表应近似电源电压');
+});
+
+test('T20 二极管与发光二极管反接时给出单向导电提示', () => {
+  for (const type of ['diode', 'led']) {
+    const s = comp('student-supply', { voltage: 3 });
+    const d = comp(type, type === 'led' ? { litThreshold: 0.01 } : {});
+    const r = comp('resistor', { resistance: 100 });
+    const bench = {
+      components: [s, d, r],
+      wires: [wire(s.id, 'pos', d.id, 'ka'), wire(d.id, 'an', r.id, 'a'), wire(r.id, 'b', s.id, 'neg')]
+    };
+    const out = solveBench(bench);
+    assert.ok(out.events.some(event => event.type === 'diode-reversed' && event.id === d.id));
+    assert.equal(out.comps.get(d.id).conducting, false);
+  }
 });
 
 let passed = 0;

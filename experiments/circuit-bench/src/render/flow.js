@@ -7,14 +7,14 @@ import { el } from './bench.js';
 
 const I_REF = 0.5;      // 参考电流：达到此值时流动最快
 const MIN_I = 2e-4;     // 低于 0.2 mA 视为断路不显示（节点泄漏电流为 nA 级，不会误显）
-const ARROW_GAP = 46;   // 箭头沿导线的间距（bench 坐标）
+const ARROW_GAP = 32;   // 更密集的箭头，缩小元件后仍能一眼看出方向
 
 // 流速模型：与电流大小正相关（漂移速率 ∝ I 的教学化）。
 // 大电流支路全速，小电流支路缓慢蠕动——并联中高阻支路也能看到微流，
 // 只是明显更慢，对比本身就是教学点。断路（~nA）则不显示。
 function flowSpeed(i) {
   const t = Math.min(1, Math.abs(i) / I_REF);
-  return 12 + 88 * Math.pow(t, 0.7);
+  return 24 + 136 * Math.pow(t, 0.62);
 }
 
 export class FlowView {
@@ -62,15 +62,22 @@ export class FlowView {
         const n = Math.max(1, Math.round(len / ARROW_GAP));
         const marks = [];
         for (let i = 0; i < n; i++) {
-          marks.push(el('path', { d: 'M -7 -5 L 7 0 L -7 5 Z', class: 'flow-arrow' }, this.layer));
+          marks.push(el('path', { d: 'M -9 -6 L 10 0 L -9 6 L -4 0 Z', class: 'flow-arrow' }, this.layer));
         }
         this.items.push({ kind: 'current', path, len, marks, speed, phase: 0 });
       } else {
         // 电子：小圆点反向移动
-        const n = Math.max(2, Math.round(len / 34));
+        const n = Math.max(3, Math.round(len / 30));
         const dots = [];
         for (let i = 0; i < n; i++) {
-          dots.push(el('circle', { r: 4.2, class: 'flow-dot' }, this.layer));
+          const mark = el('g', { class: 'flow-electron' }, this.layer);
+          el('circle', { r: 8, class: 'flow-dot' }, mark);
+          const minus = el('text', {
+            x: 0, y: 0, class: 'flow-electron-minus',
+            'text-anchor': 'middle', 'dominant-baseline': 'central'
+          }, mark);
+          minus.textContent = '−';
+          dots.push(mark);
         }
         this.items.push({ kind: 'electron', path, len, dots, speed, phase: 0 });
       }
@@ -98,8 +105,7 @@ export class FlowView {
         item.dots.forEach((dot, i) => {
           const t = (i / item.dots.length + phase) % 1;
           const p = item.path.getPointAtLength(t * item.len);
-          dot.setAttribute('cx', p.x);
-          dot.setAttribute('cy', p.y);
+          dot.setAttribute('transform', `translate(${p.x}, ${p.y})`);
         });
       }
     }

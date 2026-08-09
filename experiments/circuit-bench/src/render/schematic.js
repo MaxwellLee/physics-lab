@@ -2,13 +2,258 @@
 // 方法：导线合并等势组 → 组节点吸附到网格 → 元件符号按几何方向摆放 → 横平竖直走线。
 // 生成的是拓扑整理图，布局可能与标准画法不同（界面已注明）。
 
-import { el, text, fmtR } from './bench.js';
+import { el, text, fmtR, GEOMETRY } from './bench.js';
 import { DEFS } from '../physics/components.js';
 
 const GRID = 60;
 const HL = 40; // 符号半长
 
+// PhET 式原位电路图：保留实物台上的元件位置和每一根导线的端点，
+// 只把元件外观替换成教材符号，并将导线轻度正交化。
+// 这条路径不合并节点、不重新解释拓扑，因此视图切换不会改变学生接出的电路。
 export function renderSchematic(svg, bench, view, viewport, results) {
+  return renderDirectSchematic(svg, bench, view, viewport, results);
+}
+
+function renderDirectSchematic(svg, bench, view, viewport, results) {
+  const current = view?.viewState ?? { x: 0, y: 0, w: 1600, h: 1000 };
+  const rect = svg.getBoundingClientRect();
+  const aspect = rect.width > 0 && rect.height > 0 ? rect.height / rect.width : (current.h ?? 1000) / current.w;
+  const box = { x: current.x, y: current.y, w: current.w, h: current.w * aspect };
+  svg.setAttribute('viewBox', `${box.x} ${box.y} ${box.w} ${box.h}`);
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  svg.replaceChildren();
+
+  if (!bench.components.length) {
+    text(svg, '台面上还没有元件', {
+      x: box.x + box.w / 2,
+      y: box.y + box.h / 2,
+      class: 'sch-label',
+      'font-size': 18,
+      'text-anchor': 'middle'
+    });
+    return { flowLinks: [], flowLayer: null };
+  }
+
+  const wireLayer = el('g', { class: 'sch-wire-layer' }, svg);
+  const symbolLayer = el('g', { class: 'sch-symbol-layer' }, svg);
+  const labelLayer = el('g', { class: 'sch-label-layer' }, svg);
+  const anchors = new Map();
+  const key = (componentId, terminal) => `${componentId}:${terminal}`;
+  const isWired = (componentId, terminal) => bench.wires.some(wire =>
+    (wire.a.comp === componentId && wire.a.term === terminal) ||
+    (wire.b.comp === componentId && wire.b.term === terminal));
+
+  // 只对本来就在同一行附近、且由导线直接相连的“符号端点”做轻量行对齐。
+  // 对齐时考虑滑动变阻器滑片端、双掷开关掷点等端子相对符号中心的高度，
+  // 从而消除电池—开关、电表量程端和滑片端附近的所有短台阶，而不改变元件左右次序。
+  const displayCenters = new Map();
+  const componentById = new Map(bench.components.map(component => [component.id, component]));
+  const terminalOffsetY = (component, terminal) => {
+    if (component?.type === 'rheostat' && (terminal === 'c' || terminal === 'd')) return -22;
+    if (component?.type === 'spdt-switch' && terminal === 'x') return -16;
+    if (component?.type === 'spdt-switch' && terminal === 'y') return 16;
+    return 0;
+  };
+  for (const component of bench.components) {
+    const geometry = view?.geometryOf(component) ?? GEOMETRY[component.type];
+    if (!geometry) continue;
+    displayCenters.set(component.id, {
+      x: component.x + geometry.w / 2,
+      y: component.y + geometry.h / 2
+    });
+  }
+  const rowGraph = new Map([...displayCenters.keys()].map(id => [id, []]));
+  for (const wire of bench.wires) {
+    if (wire.a.comp === wire.b.comp) continue;
+    const a = displayCenters.get(wire.a.comp), b = displayCenters.get(wire.b.comp);
+    const aComp = componentById.get(wire.a.comp), bComp = componentById.get(wire.b.comp);
+    if (!a || !b || !aComp || !bComp) continue;
+    const aOffset = terminalOffsetY(aComp, wire.a.term);
+    const bOffset = terminalOffsetY(bComp, wire.b.term);
+    if (Math.abs((a.y + aOffset) - (b.y + bOffset)) > 72) continue;
+    // 约束：displayY(b) = displayY(a) + aOffset - bOffset
+    const delta = aOffset - bOffset;
+    rowGraph.get(wire.a.comp).push({ id: wire.b.comp, delta });
+    rowGraph.get(wire.b.comp).push({ id: wire.a.comp, delta: -delta });
+  }
+  const visitedRows = new Set();
+  for (const startId of displayCenters.keys()) {
+    if (visitedRows.has(startId)) continue;
+    const relative = new Map([[startId, 0]]);
+    const queue = [startId];
+    visitedRows.add(startId);
+    while (queue.length) {
+      const id = queue.shift();
+      for (const edge of rowGraph.get(id) ?? []) {
+        if (relative.has(edge.id)) continue;
+        relative.set(edge.id, relative.get(id) + edge.delta);
+        visitedRows.add(edge.id);
+        queue.push(edge.id);
+      }
+    }
+    const base = Math.round(([...relative].reduce((sum, [id, rel]) =>
+      sum + displayCenters.get(id).y - rel, 0) / relative.size) / 10) * 10;
+    for (const [id, rel] of relative) displayCenters.get(id).y = base + rel;
+  }
+
+  const warningIds = new Set((results?.events ?? [])
+    .filter(event => ['fuse-blown', 'overpower', 'overrange', 'meter-terminal', 'meter-reversed', 'voltmeter-series', 'diode-reversed'].includes(event.type))
+    .map(event => event.id)
+    .filter(Boolean));
+  const shortComponentIds = new Set((results?.events ?? [])
+    .filter(event => event.type === 'short' || event.type === 'ammeter-parallel')
+    .flatMap(event => event.ids ?? (event.id ? [event.id] : [])));
+
+  for (const component of bench.components) {
+    const geometry = view?.geometryOf(component) ?? GEOMETRY[component.type];
+    const definition = DEFS[component.type];
+    if (!geometry || !definition) continue;
+
+    const M = displayCenters.get(component.id);
+    const group = el('g', {
+      class: 'sch-component',
+      'data-comp': component.id,
+      transform: `translate(${M.x}, ${M.y})`,
+      role: 'button',
+      tabindex: '0',
+      'aria-label': `${definition.label}（拖动可调整位置）`
+    }, symbolLayer);
+    group.classList.toggle('fault-short', shortComponentIds.has(component.id));
+    group.classList.toggle('fault-warning', warningIds.has(component.id));
+
+    if (component.type === 'rheostat') {
+      drawRheostat(group, component, isWired(component.id, 'c'), isWired(component.id, 'd'));
+      const rheostatAnchors = {
+        a: { x: M.x - HL, y: M.y, dx: -1, dy: 0 },
+        b: { x: M.x + HL, y: M.y, dx: 1, dy: 0 },
+        c: { x: M.x - HL, y: M.y - 22, dx: -1, dy: 0 },
+        d: { x: M.x + HL, y: M.y - 22, dx: 1, dy: 0 }
+      };
+      for (const terminal of definition.terminals) anchors.set(key(component.id, terminal), rheostatAnchors[terminal]);
+    } else if (component.type === 'spdt-switch') {
+      drawSpdt(group, component.params.toY);
+      anchors.set(key(component.id, 'com'), { x: M.x - HL, y: M.y, dx: -1, dy: 0 });
+      anchors.set(key(component.id, 'x'), { x: M.x + HL + 10, y: M.y - 16, dx: 1, dy: 0 });
+      anchors.set(key(component.id, 'y'), { x: M.x + HL + 10, y: M.y + 16, dx: 1, dy: 0 });
+    } else {
+      const terminals = definition.terminals;
+      const sorted = [...terminals].sort((a, b) => (geometry.terms[a]?.x ?? 0) - (geometry.terms[b]?.x ?? 0));
+      const leftTerminal = sorted[0];
+      drawSymbol(group, component, leftTerminal, false, HL, HL);
+
+      if (definition.kind === 'meter') {
+        anchors.set(key(component.id, 'minus'), { x: M.x - HL, y: M.y, dx: -1, dy: 0 });
+        // 电路图只表达“正量程端”，两个量程柱共用符号右端的同一轴线，
+        // 避免电压表/电流表右侧出现没有物理意义的 7 px 小折线。
+        anchors.set(key(component.id, 'low'), { x: M.x + HL, y: M.y, dx: 1, dy: 0 });
+        anchors.set(key(component.id, 'high'), { x: M.x + HL, y: M.y, dx: 1, dy: 0 });
+      } else if (terminals.length === 1) {
+        anchors.set(key(component.id, terminals[0]), { x: M.x, y: M.y, dx: 0, dy: 1 });
+      } else {
+        anchors.set(key(component.id, sorted[0]), { x: M.x - HL, y: M.y, dx: -1, dy: 0 });
+        anchors.set(key(component.id, sorted[sorted.length - 1]), { x: M.x + HL, y: M.y, dx: 1, dy: 0 });
+        for (let index = 1; index < sorted.length - 1; index++) {
+          const offset = (index - (sorted.length - 1) / 2) * 12;
+          anchors.set(key(component.id, sorted[index]), { x: M.x + HL, y: M.y + offset, dx: 1, dy: 0 });
+        }
+      }
+    }
+
+    drawLabel(labelLayer, component, M, component.type === 'rheostat' ? 42 : 38);
+  }
+
+  const snap = value => Math.round(value / 10) * 10;
+  const orthogonalPath = (start, end) => {
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    if (Math.abs(dy) <= 12) return `M ${start.x} ${start.y} L ${end.x} ${start.y}`;
+    if (Math.abs(dx) <= 12) return `M ${start.x} ${start.y} L ${start.x} ${end.y}`;
+    // 两个端点朝向同一侧时，导线从该侧的外缘绕行。
+    // 典型例子是“最右侧灯泡 → 左下方电源”的回线；这样不会穿过上方串联支路，
+    // 也不会在没有连接的地方制造一个看似相交的假节点。
+    if (start.dx && start.dx === end.dx) {
+      const outerX = start.dx > 0
+        ? snap(Math.max(start.x, end.x) + 52)
+        : snap(Math.min(start.x, end.x) - 52);
+      return `M ${start.x} ${start.y} L ${outerX} ${start.y} L ${outerX} ${end.y} L ${end.x} ${end.y}`;
+    }
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      const mx = snap((start.x + end.x) / 2);
+      return `M ${start.x} ${start.y} L ${mx} ${start.y} L ${mx} ${end.y} L ${end.x} ${end.y}`;
+    }
+    const my = snap((start.y + end.y) / 2);
+    return `M ${start.x} ${start.y} L ${start.x} ${my} L ${end.x} ${my} L ${end.x} ${end.y}`;
+  };
+
+  const shortWireIds = new Set((results?.events ?? [])
+    .filter(event => event.type === 'short' || event.type === 'ammeter-parallel')
+    .flatMap(event => event.wireIds ?? []));
+  const terminalWireCount = new Map();
+  for (const wire of bench.wires) {
+    terminalWireCount.set(key(wire.a.comp, wire.a.term), (terminalWireCount.get(key(wire.a.comp, wire.a.term)) ?? 0) + 1);
+    terminalWireCount.set(key(wire.b.comp, wire.b.term), (terminalWireCount.get(key(wire.b.comp, wire.b.term)) ?? 0) + 1);
+  }
+
+  // A multi-wire terminal gets one short shared lead. Every branch starts at the
+  // far end of that lead, so the junction dot sits on the visible T intersection
+  // instead of drifting onto the component symbol.
+  const branchAnchors = new Map();
+  for (const [terminalKey, count] of terminalWireCount) {
+    if (count <= 1) continue;
+    const point = anchors.get(terminalKey);
+    if (!point) continue;
+    const dx = point.dx || 1;
+    const dy = point.dy || 0;
+    const branch = { x: point.x + dx * 40, y: point.y + dy * 40, dx, dy };
+    branchAnchors.set(terminalKey, branch);
+    el('path', {
+      d: `M ${point.x} ${point.y} L ${branch.x} ${branch.y}`,
+      class: 'sch-wire sch-branch-stub'
+    }, wireLayer);
+  }
+
+  const flowLinks = [];
+  for (const wire of bench.wires) {
+    const startKey = key(wire.a.comp, wire.a.term);
+    const endKey = key(wire.b.comp, wire.b.term);
+    const start = branchAnchors.get(startKey) ?? anchors.get(startKey);
+    const end = branchAnchors.get(endKey) ?? anchors.get(endKey);
+    if (!start || !end) continue;
+    const d = orthogonalPath(start, end);
+    el('path', {
+      d,
+      class: `sch-wire${shortWireIds.has(wire.id) ? ' fault-short' : ''}`,
+      'data-wire': wire.id
+    }, wireLayer);
+    flowLinks.push({ d, I: results?.wires?.get(wire.id)?.I ?? 0 });
+  }
+
+  // 教材规范：普通元件端点不画空心圆；只有同一端子接入两根及以上外部导线时，
+  // 加上元件内部路径才构成三叉（或更多）分支，此时绘制实心结点。
+  for (const component of bench.components) {
+    for (const terminal of DEFS[component.type]?.terminals ?? []) {
+      if ((terminalWireCount.get(key(component.id, terminal)) ?? 0) <= 1) continue;
+      const point = branchAnchors.get(key(component.id, terminal));
+      if (!point) continue;
+      el('circle', {
+        cx: point.x,
+        cy: point.y,
+        r: 4.5,
+        class: 'sch-junction',
+        'data-comp': component.id,
+        'data-term': terminal
+      }, symbolLayer);
+    }
+  }
+
+  const flowLayer = el('g', { class: 'sch-flow-layer' }, svg);
+  void viewport;
+  return { flowLinks, flowLayer };
+}
+
+// 旧版“按拓扑自动排版”的实现暂时保留，方便回归对照；正式界面不再调用。
+function renderSchematicLegacy(svg, bench, view, viewport, results) {
   svg.setAttribute('viewBox', '0 0 1600 1000');
   svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
   svg.replaceChildren();
@@ -16,6 +261,12 @@ export function renderSchematic(svg, bench, view, viewport, results) {
     text(svg, '台面上还没有元件', { x: 800, y: 500, class: 'sch-label', 'font-size': 18, 'text-anchor': 'middle' });
     return { flowLinks: [], flowLayer: null };
   }
+
+  // 电路图不继承学生在实物台上的随意摆放，而是先按连接拓扑自动整理。
+  // 简单串联/环路沿标准矩形分布；含分支的网络按连接层级均匀排列。
+  const arranged = arrangeTextbookBench(bench);
+  bench = arranged.bench;
+  view = arranged.view;
 
   // 各端子「流入元件」的电流：求解结果的导线电流 I 正方向为 a→b，则 a 端流出（−I）、b 端流入（+I）。
   // 流向动画以此为每段引线定向定大小（KCL：同一等势组各端子流入之和为 0）。
@@ -237,7 +488,7 @@ export function renderSchematic(svg, bench, view, viewport, results) {
         const firstIsA = horizontal ? P1.x <= P2.x : P1.y <= P2.y;
         if (!firstIsA) { aTerm = terms[1]; bTerm = terms[0]; PA = P2; PB = P1; }
       }
-      const g = el('g', { transform: `translate(${M.x}, ${M.y})${horizontal ? '' : ' rotate(90)'}` }, symLayer);
+      const g = el('g', { transform: `translate(${M.x}, ${M.y})${horizontal ? '' : ' rotate(90)'}`, class: 'sch-component', 'data-comp': comp.id }, symLayer);
       // 引线长度：接线节点比 HL 更近时（如并联支路）缩短引线，让引线尖端恰好落在节点上，
       // 避免导线伸进引线区、避免节点外留下出头线段
       const bodyH = BODY_HALF[comp.type] ?? 15;
@@ -278,7 +529,7 @@ export function renderSchematic(svg, bench, view, viewport, results) {
       // 人教版标准画法：滑杆固定在电阻丝上方，不随节点方位镜像；c/d 分别从滑杆左/右端引出，
       // 只画实际接线的端子，未接线的端子不引出悬空线
       const wiredC = isTermWired(comp.id, 'c'), wiredD = isTermWired(comp.id, 'd');
-      const g = el('g', { transform: `translate(${M.x}, ${M.y})` }, symLayer);
+      const g = el('g', { transform: `translate(${M.x}, ${M.y})`, class: 'sch-component', 'data-comp': comp.id }, symLayer);
       drawRheostat(g, comp, wiredC, wiredD);
       const sym = pushBB({ x1: M.x - HL - 8, y1: M.y - 34, x2: M.x + HL + 8, y2: M.y + 14 },
         { x1: M.x - 30, y1: M.y - 26, x2: M.x + 30, y2: M.y + 11 });
@@ -308,7 +559,7 @@ export function renderSchematic(svg, bench, view, viewport, results) {
       placedM.push(M);
       const flipX = PC.x > midXY.x;
       const flipY = PX.y > PY.y;
-      const g = el('g', { transform: `translate(${M.x}, ${M.y}) scale(${flipX ? -1 : 1}, ${flipY ? -1 : 1})` }, symLayer);
+      const g = el('g', { transform: `translate(${M.x}, ${M.y}) scale(${flipX ? -1 : 1}, ${flipY ? -1 : 1})`, class: 'sch-component', 'data-comp': comp.id }, symLayer);
       drawSpdt(g, comp.params.position === 'y');
       const sym = pushBB({ x1: M.x - HL - 16, y1: M.y - 26, x2: M.x + HL + 16, y2: M.y + 26 },
         { x1: M.x - 16, y1: M.y - 18, x2: M.x + 16, y2: M.y + 18 });
@@ -504,7 +755,129 @@ export function renderSchematic(svg, bench, view, viewport, results) {
 
   // 6. 流向动画层：最顶层，路径与可见导线重合（由 app.js 的 FlowView 填充）
   const flowLayer = el('g', { class: 'sch-flow-layer' }, svg);
+  const shortIds = new Set(results?.events?.find(event => event.type === 'short')?.ids ?? []);
+  const warningIds = new Set((results?.events ?? [])
+    .filter(event => ['fuse-blown', 'overpower', 'overrange'].includes(event.type))
+    .map(event => event.id));
+  svg.querySelectorAll('.sch-component').forEach(node => {
+    node.classList.toggle('fault-short', shortIds.has(node.dataset.comp));
+    node.classList.toggle('fault-warning', warningIds.has(node.dataset.comp));
+  });
   return { flowLinks, flowLayer };
+}
+
+function arrangeTextbookBench(sourceBench) {
+  const components = sourceBench.components.map(component => ({
+    ...component,
+    params: { ...component.params }
+  }));
+  const byId = new Map(components.map(component => [component.id, component]));
+  const adjacency = new Map(components.map(component => [component.id, new Set()]));
+  for (const wire of sourceBench.wires) {
+    if (wire.a.comp === wire.b.comp) continue;
+    adjacency.get(wire.a.comp)?.add(wire.b.comp);
+    adjacency.get(wire.b.comp)?.add(wire.a.comp);
+  }
+
+  const unvisited = new Set(components.map(component => component.id));
+  const networks = [];
+  while (unvisited.size) {
+    const seed = unvisited.values().next().value;
+    const ids = [];
+    const queue = [seed];
+    unvisited.delete(seed);
+    while (queue.length) {
+      const id = queue.shift();
+      ids.push(id);
+      for (const next of adjacency.get(id) ?? []) {
+        if (!unvisited.has(next)) continue;
+        unvisited.delete(next);
+        queue.push(next);
+      }
+    }
+    networks.push(ids);
+  }
+
+  networks.sort((a, b) => b.length - a.length);
+  networks.forEach((ids, networkIndex) => {
+    const source = ids.find(id => DEFS[byId.get(id).type]?.kind === 'source') ?? ids[0];
+    const order = [];
+    const seen = new Set();
+    const walk = (id, parent = null) => {
+      if (seen.has(id)) return;
+      seen.add(id);
+      order.push(id);
+      const next = [...(adjacency.get(id) ?? [])]
+        .filter(candidate => candidate !== parent && ids.includes(candidate) && !seen.has(candidate))
+        .sort((a, b) => (adjacency.get(a)?.size ?? 0) - (adjacency.get(b)?.size ?? 0));
+      for (const candidate of next) walk(candidate, id);
+    };
+    walk(source);
+    for (const id of ids) walk(id);
+
+    // 主网络沿一个规整长方形的周界均匀排布：电源固定在中下部，
+    // 相邻元件尽量落在相邻边段，从源头上减少折线和不均匀长线。
+    const inset = networkIndex === 0 ? 0 : networkIndex * 70;
+    const bounds = {
+      left: 260 + inset,
+      right: 1340 - inset,
+      top: 230 + networkIndex * 90,
+      bottom: 740 + networkIndex * 40
+    };
+    order.forEach((id, index) => {
+      const center = rectanglePerimeterPoint(index, order.length, bounds);
+      placeCenter(byId.get(id), center);
+    });
+  });
+
+  const bench = { components, wires: sourceBench.wires };
+  const view = {
+    terminalPos(compId, term) {
+      const comp = byId.get(compId);
+      const terminal = GEOMETRY[comp?.type]?.terms?.[term];
+      return comp && terminal ? { x: comp.x + terminal.x, y: comp.y + terminal.y } : null;
+    }
+  };
+  return { bench, view };
+}
+
+// 从底边中央出发，依次沿左下角、左边、顶边、右边回到底边中央。
+// index=0 永远是电源，因此电池/电源默认稳定地位于中下部。
+function rectanglePerimeterPoint(index, count, bounds) {
+  const { left, right, top, bottom } = bounds;
+  if (count <= 1) return { x: (left + right) / 2, y: bottom };
+  if (count === 2) return index === 0
+    ? { x: (left + right) / 2, y: bottom }
+    : { x: (left + right) / 2, y: top };
+
+  const halfW = (right - left) / 2;
+  const height = bottom - top;
+  const lengths = [halfW, height, right - left, height, halfW];
+  const perimeter = lengths.reduce((sum, value) => sum + value, 0);
+  let distance = index * perimeter / count;
+  const segments = [
+    [{ x: (left + right) / 2, y: bottom }, { x: left, y: bottom }],
+    [{ x: left, y: bottom }, { x: left, y: top }],
+    [{ x: left, y: top }, { x: right, y: top }],
+    [{ x: right, y: top }, { x: right, y: bottom }],
+    [{ x: right, y: bottom }, { x: (left + right) / 2, y: bottom }]
+  ];
+  for (let i = 0; i < segments.length; i++) {
+    const length = lengths[i];
+    if (distance <= length || i === segments.length - 1) {
+      const t = length ? Math.min(1, distance / length) : 0;
+      const [a, b] = segments[i];
+      return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+    }
+    distance -= length;
+  }
+  return { x: (left + right) / 2, y: bottom };
+}
+
+function placeCenter(component, center) {
+  const geometry = GEOMETRY[component.type];
+  component.x = Math.round(center.x - geometry.w / 2);
+  component.y = Math.round(center.y - geometry.h / 2);
 }
 
 function snapG(v, grid = GRID) { return Math.round(v / grid) * grid; }

@@ -3,7 +3,7 @@
 // 只负责“画”与视图状态，物理求解在 physics 层，交互事件通过 hooks 回调给 ui 层。
 
 import { WIRE_SPECIMENS } from '../../data.js';
-import { DEFS } from '../physics/components.js';
+import { DEFS, HORIZONTALLY_FLIPPABLE } from '../physics/components.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 export function el(tag, attrs = {}, parent) {
@@ -20,8 +20,8 @@ export function text(parent, str, attrs = {}) {
 
 // —— 视图世界范围：元件可摆放区域（bench 坐标）——
 export const WORLD = { x: -600, y: -400, w: 2400, h: 1500 };
-// 默认取景：以 (800, 380) 为中心、宽 573（在早期基础上累计放大 3 倍，方便拖拽与触屏）
-const DEFAULT_VIEW = { x: 514, y: 229, w: 573 };
+// 默认取景拉远到原来的 4 倍：元件初始视觉尺寸为旧版的 25%，方便在一屏搭建完整电路。
+const DEFAULT_VIEW = { x: -346, y: -165, w: 2292 };
 const MIN_W = 420, MAX_W = 3400;
 
 // —— 元件几何与绘制定义 ——
@@ -38,16 +38,18 @@ const circle = (g, cx, cy, r, fill, stroke, sw = 1.2) =>
 const label = (g, str, x, y, size = 10, fill = '#33414f', anchor = 'middle', extra = {}) =>
   // 元件名称标签统一按 1.25 倍放大（配合默认 1.5 倍取景，保证小字清晰可读）
   text(g, str, { x, y, 'font-size': Math.round(size * 12.5) / 10, fill, 'text-anchor': anchor, class: 'comp-ink', ...extra });
+const nameLabel = (g, str, x, y, size = 10, anchor = 'middle') =>
+  label(g, str, x, y, size, '#111820', anchor, { class: 'comp-ink component-name' });
 
 export const GEOMETRY = {
   // —— 学生电源：金属机箱 + 数显窗口 + 调压旋钮 + 红黑接线柱 ——
   'student-supply': {
-    w: 230, h: 150,
-    terms: { pos: T(206, 92, 'pos', '+'), neg: T(206, 124, 'neg', '−') },
+    w: 238, h: 160,
+    terms: { pos: T(214, 76, 'pos', '+'), neg: T(214, 140, 'neg', '−') },
     draw(g) {
       rect(g, 10, 16, 176, 118, 8, '#dde3e9', '#98a5b1', 1.6);
       rect(g, 10, 16, 176, 22, 8, '#c7d0d9', '#98a5b1', 1.2);
-      label(g, '学生电源', 24, 32, 10.5, '#33414f', 'start');
+      nameLabel(g, '学生电源', 24, 32, 10.5, 'start');
       rect(g, 22, 48, 88, 34, 3, '#1f2b38', '#0f1822', 1.5);
       text(g, '', { x: 66, y: 71, class: 'supply-volt meter-read', 'font-size': 14, 'text-anchor': 'middle' });
       label(g, '直流输出 DC', 22, 100, 8, '#5a6a78', 'start');
@@ -59,7 +61,7 @@ export const GEOMETRY = {
         line(g, 64 + Math.sin(a) * 21, 118 - Math.cos(a) * 21, 64 + Math.sin(a) * 24, 118 - Math.cos(a) * 24, '#8a97a3', 1.2);
       }
       label(g, '调压', 96, 122, 8, '#5a6a78', 'start');
-      rect(g, 194, 80, 28, 58, 4, '#c7d0d9', '#98a5b1', 1.2);
+      rect(g, 194, 62, 36, 88, 4, '#c7d0d9', '#98a5b1', 1.2);
       rect(g, 22, 136, 18, 6, 2, '#98a5b1', 'none');
       rect(g, 150, 136, 18, 6, 2, '#98a5b1', 'none');
     },
@@ -86,7 +88,7 @@ export const GEOMETRY = {
       // 接线柱引出片
       line(g, 22, 64, 8, 64, '#3a3f46', 2.6);
       line(g, 228, 64, 242, 64, '#c0453e', 2.6);
-      label(g, '干电池组', 125, 28, 10, '#33414f');
+      nameLabel(g, '干电池组', 125, 28, 10);
       text(g, '', { x: 125, y: 104, class: 'pack-volt comp-ink', 'font-size': 10, fill: '#5a6a78', 'text-anchor': 'middle' });
       GEOMETRY['battery-pack'].update(g, comp);
     },
@@ -122,7 +124,7 @@ export const GEOMETRY = {
       circle(g, 94, 44, 4, '#22352b', 'none');
       line(g, 122, 52, 142, 46, '#c0453e', 2.4);
       line(g, 122, 92, 142, 92, '#3a3f46', 2.4);
-      label(g, '蓄电池', 16, 28, 10, '#33414f', 'start');
+      nameLabel(g, '蓄电池', 16, 28, 10, 'start');
       label(g, `${comp.params.voltage ?? 2} V`, 16, 122, 9, '#5a6a78', 'start');
     }
   },
@@ -139,7 +141,7 @@ export const GEOMETRY = {
       circle(blade, 146, 62, 5.5, '#2c3138', '#1c2025', 1.2);
       line(g, 16, 62, 16, 70, '#96742e', 3);
       line(g, 164, 62, 164, 70, '#96742e', 3);
-      label(g, '开关', 90, 28, 10, '#33414f');
+      nameLabel(g, '开关', 90, 28, 10);
       text(g, '', { x: 90, y: 102, class: 'switch-state comp-ink', 'font-size': 9, fill: '#5a6a78', 'text-anchor': 'middle' });
       GEOMETRY.switch.update(g, comp);
     },
@@ -162,7 +164,7 @@ export const GEOMETRY = {
       const blade = el('g', { class: 'blade' }, g);
       line(blade, 16, 92, 176, 46, '#c98d4b', 6);
       circle(blade, 172, 48, 5, '#2c3138', '#1c2025', 1.2);
-      label(g, '单刀双掷', 105, 20, 10, '#33414f');
+      nameLabel(g, '单刀双掷', 105, 20, 10);
       label(g, 'X', 186, 30, 9, '#5a6a78');
       label(g, 'Y', 186, 124, 9, '#5a6a78');
       GEOMETRY['spdt-switch'].update(g, comp);
@@ -184,7 +186,7 @@ export const GEOMETRY = {
       rect(g, 36, 33, 98, 24, 12, '#d9b06a', '#a8813e', 1.4);
       const bands = ['#5b3a29', '#20242a', '#c23b2e', '#c9a35c'];
       bands.forEach((c, i) => rect(g, 50 + i * 18, 33, 6, 24, 0, c, 'none'));
-      text(g, '', { x: 85, y: 82, class: 'res-val comp-ink', 'font-size': 10, fill: '#33414f', 'text-anchor': 'middle' });
+      text(g, '', { x: 85, y: 82, class: 'res-val comp-ink component-name', 'font-size': 10, fill: '#33414f', 'text-anchor': 'middle' });
       GEOMETRY.resistor.update(g, comp);
     },
     update(g, comp) {
@@ -211,7 +213,7 @@ export const GEOMETRY = {
       const slider = el('g', { class: 'rheo-slider' }, g);
       rect(slider, -9, 22, 18, 24, 3, '#4a5560', '#2f3942', 1.4);
       line(slider, 0, 46, 0, 56, '#2f3942', 3);
-      label(g, '滑动变阻器', 130, 122, 10, '#33414f');
+      nameLabel(g, '滑动变阻器', 130, 122, 10);
       text(g, '', { x: 130, y: 136, class: 'rheo-val comp-ink', 'font-size': 10, fill: '#5a6a78', 'text-anchor': 'middle' });
     },
     update(g, comp) {
@@ -238,7 +240,7 @@ export const GEOMETRY = {
         const a = i * Math.PI / 4;
         circle(g, 122 + Math.sin(a) * 19, 51 - Math.cos(a) * 19, 1.1, '#8a7a58', 'none');
       }
-      label(g, '电阻箱', 90, 114, 10, '#33414f');
+      nameLabel(g, '电阻箱', 90, 114, 10);
     },
     update(g, comp) {
       g.querySelector('.box-val').textContent = `${comp.params.resistance ?? 5} Ω`;
@@ -258,7 +260,7 @@ export const GEOMETRY = {
       let d = 'M 37 55';
       for (let i = 0; i < 26; i++) d += ` l 7.7 ${i % 2 ? 8 : -8}`;
       el('path', { d, fill: 'none', stroke: '#8a6d3b', 'stroke-width': 1.6 }, g);
-      label(g, '电阻丝实验板', 140, 14, 10, '#33414f');
+      nameLabel(g, '电阻丝实验板', 140, 14, 10);
       text(g, '', { x: 140, y: 104, class: 'specimen-label comp-ink', 'font-size': 9, fill: '#5a6a78', 'text-anchor': 'middle' });
     },
     update(g, comp) {
@@ -270,7 +272,9 @@ export const GEOMETRY = {
   // —— 二极管 ——
   diode: {
     w: 130, h: 90,
-    terms: { an: T(8, 45), ka: T(122, 45) },
+    // 课堂化极性提示：阳极 A 用红色“+”，阴极 K 用黑色“−”。
+    // terminal key 仍为 an / ka，左右翻转只改变位置，不改变电学身份。
+    terms: { an: T(8, 45, 'pos', '+'), ka: T(122, 45, 'neg', '−') },
     draw(g) {
       rect(g, 2, 28, 126, 34, 4, '#efe9dc', '#cbbfa8', 1.2);
       line(g, 12, 45, 30, 45, '#9aa4ad', 2);
@@ -279,14 +283,15 @@ export const GEOMETRY = {
       rect(g, 86, 35, 9, 20, 0, '#c9ccd2', 'none');
       el('path', { d: 'M 48 39 L 62 45 L 48 51 Z', fill: '#dfe5ea' }, g);
       line(g, 66, 39, 66, 51, '#dfe5ea', 1.8);
-      label(g, '二极管', 65, 80, 10, '#33414f');
+      nameLabel(g, '二极管', 65, 80, 10);
     }
   },
 
   // —— 发光二极管 ——
   led: {
-    w: 130, h: 110,
-    terms: { an: T(30, 96), ka: T(100, 96) },
+    w: 130, h: 124,
+    // 标记放在接线柱下方，避免与灯体上的“LED”文字重叠。
+    terms: { an: T(30, 96, 'pos', '+', true), ka: T(100, 96, 'neg', '−', true) },
     draw(g) {
       rect(g, 18, 84, 94, 20, 4, '#efe9dc', '#cbbfa8', 1.2);
       line(g, 44, 60, 37, 88, '#9aa4ad', 2.2);
@@ -295,7 +300,7 @@ export const GEOMETRY = {
       el('path', { d: 'M 40 62 A 25 25 0 0 1 90 62 L 86 66 L 44 66 Z', class: 'led-dome', fill: 'rgba(215,238,248,.55)', stroke: '#8fb7c9', 'stroke-width': 1.4 }, g);
       line(g, 86, 40, 86, 62, '#8fb7c9', 1.6);
       el('path', { d: 'M 56 62 L 58 50 L 66 50 L 64 62 Z M 70 62 L 72 54 L 80 54 L 78 62 Z', fill: '#8fa9b6' }, g);
-      label(g, 'LED', 65, 80, 10, '#33414f');
+      nameLabel(g, 'LED', 65, 80, 10);
     },
     update(g, comp, result) {
       g.querySelector('.led-dome').classList.toggle('lit', !!result?.lit);
@@ -336,7 +341,7 @@ export const GEOMETRY = {
       line(broken, 36, 45, 68, 45, '#c98d4b', 2);
       line(broken, 82, 45, 114, 45, '#c98d4b', 2);
       el('path', { d: 'M 70 40 l 6 -6 M 74 46 l 8 -3 M 70 50 l 7 5', stroke: '#d0432f', 'stroke-width': 1.6, fill: 'none' }, broken);
-      text(g, '', { x: 75, y: 80, class: 'fuse-label comp-ink', 'font-size': 10, fill: '#33414f', 'text-anchor': 'middle' });
+      text(g, '', { x: 75, y: 80, class: 'fuse-label comp-ink component-name', 'font-size': 10, fill: '#33414f', 'text-anchor': 'middle' });
       GEOMETRY.fuse.update(g, comp, null);
     },
     update(g, comp, result) {
@@ -365,7 +370,7 @@ export const GEOMETRY = {
       el('path', { d: 'M 116 60 A 16 16 0 0 1 116 84', fill: 'none' }, waves);
       el('path', { d: 'M 124 52 A 26 26 0 0 1 124 92', fill: 'none' }, waves);
       el('path', { d: 'M 132 44 A 36 36 0 0 1 132 100', fill: 'none' }, waves);
-      label(g, '电铃', 75, 128, 10, '#33414f');
+      nameLabel(g, '电铃', 75, 128, 10);
     },
     update(g, comp, result) {
       g.classList.toggle('active-load', !!result?.active);
@@ -384,10 +389,10 @@ export const GEOMETRY = {
       line(g, 120, 81, 134, 81, '#9aa4ad', 4);
       const fan = el('g', { class: 'motor-fan' }, g);
       for (const a of [0, 90, 180, 270]) {
-        el('path', { d: 'M 138 81 L 138 62 Q 146 64 144 74 Z', fill: '#c9a35c', stroke: '#96742e', 'stroke-width': 1, transform: `rotate(${a} 138 81)` }, fan);
+        el('path', { d: 'M 138 81 L 138 49 Q 155 52 151 70 Z', fill: '#d5ad5e', stroke: '#8d6926', 'stroke-width': 1.2, transform: `rotate(${a} 138 81)` }, fan);
       }
-      circle(fan, 138, 81, 5, '#4a5560', '#2f3942', 1.2);
-      label(g, '电动机', 78, 138, 10, '#33414f');
+      circle(fan, 138, 81, 6.5, '#4a5560', '#2f3942', 1.2);
+      nameLabel(g, '电动机', 78, 138, 10);
     },
     update(g, comp, result) {
       g.classList.toggle('active-load', !!result?.active);
@@ -414,7 +419,7 @@ function drawBulb(g, comp) {
   line(g, 68, 84, 71, 66, '#8fa9b6', 1.6);
   line(g, 82, 84, 79, 66, '#8fa9b6', 1.6);
   el('path', { d: 'M 63 66 q 3 -7 6 0 q 3 7 6 0 q 3 -7 6 0 q 3 7 6 0', class: 'filament', fill: 'none', stroke: '#6b5a3e', 'stroke-width': 1.6 }, g);
-  label(g, nl ? '小灯泡 · 非线性' : '小灯泡', 75, 138, 9.5, '#33414f');
+  nameLabel(g, nl ? '小灯泡 · 非线性' : '小灯泡', 75, 138, 9.5);
 }
 function updateBulb(g, comp, result) {
   const glass = g.querySelector('.bulb-glass');
@@ -432,6 +437,15 @@ function updateBulb(g, comp, result) {
 
 // 三接线柱学校电表：白色表箱 + 半圆表盘 + 底部 −/低/高量程接线柱
 function meterGeometry(type, symbol, name, termLabels, fmt, centerZero = false) {
+  const scale = type === 'ammeter'
+    ? { outer: [0, 1, 2, 3], inner: [0, 0.2, 0.4, 0.6] }
+    : type === 'voltmeter'
+      ? { outer: [0, 5, 10, 15], inner: [0, 1, 2, 3] }
+      : null;
+  const polar = (angle, radius, cx = 85, cy = 103) => {
+    const a = angle * Math.PI / 180;
+    return { x: cx + Math.sin(a) * radius, y: cy - Math.cos(a) * radius };
+  };
   return {
     w: 170, h: 168,
     terms: {
@@ -441,38 +455,57 @@ function meterGeometry(type, symbol, name, termLabels, fmt, centerZero = false) 
     },
     draw(g) {
       rect(g, 8, 8, 154, 128, 10, '#f4f1e6', '#cfc6ae', 1.6);
-      el('path', { d: 'M 30 96 A 55 55 0 0 1 140 96 Z', fill: '#fdfcf6', stroke: '#cfc6ae', 'stroke-width': 1.2 }, g);
-      for (let i = 0; i <= 10; i++) {
-        const ang = (-55 + i * 11) * Math.PI / 180;
-        line(g, 85 + Math.sin(ang) * 46, 96 - Math.cos(ang) * 46,
-          85 + Math.sin(ang) * 52, 96 - Math.cos(ang) * 52, '#7d8a94', i % 5 === 0 ? 1.6 : 1);
+      el('path', { d: 'M 38 76 A 54 54 0 0 1 132 76 L 125 82 A 46 46 0 0 0 45 82 Z', fill: '#fdfcf6', stroke: '#cfc6ae', 'stroke-width': 1.2 }, g);
+      if (centerZero) {
+        for (let i = 0; i <= 10; i++) {
+          const angle = -55 + i * 11;
+          const a = polar(angle, 46), b = polar(angle, 52);
+          line(g, a.x, a.y, b.x, b.y, '#7d8a94', i % 5 === 0 ? 1.6 : 1);
+        }
+        text(g, '0', { x: 85, y: 45, class: 'comp-ink', 'font-size': 8, fill: '#5a6a78', 'text-anchor': 'middle' });
+      } else {
+        // 人教版教学电表：30 个小分格。电流表对应 0.02 A / 0.1 A，
+        // 电压表对应 0.1 V / 0.5 V；两套量程共用同一组刻度线。
+        for (let i = 0; i <= 30; i++) {
+          const angle = -60 + i * 4;
+          const outer = polar(angle, 54);
+          const innerRadius = i % 10 === 0 ? 44 : i % 5 === 0 ? 47 : 50;
+          const inner = polar(angle, innerRadius);
+          line(g, inner.x, inner.y, outer.x, outer.y, '#667784', i % 10 === 0 ? 1.6 : i % 5 === 0 ? 1.25 : .85)
+            .classList.add('meter-tick');
+        }
+        for (let i = 0; i < 4; i++) {
+          const angle = -60 + i * 40;
+          const op = polar(angle, 64);
+          const ip = polar(angle, 39);
+          text(g, `${scale.outer[i]}`, { x: op.x, y: op.y + 2, class: 'comp-ink meter-scale-label outer', 'font-size': 7.3, fill: '#445563', 'text-anchor': 'middle' });
+          text(g, `${scale.inner[i]}`, { x: ip.x, y: ip.y + 2, class: 'comp-ink meter-scale-label inner', 'font-size': 6.8, fill: '#8a4b35', 'text-anchor': 'middle' });
+        }
       }
-      text(g, '0', { x: 38, y: 84, class: 'meter-min-t comp-ink', 'font-size': 8, fill: '#5a6a78', 'text-anchor': 'middle' });
-      text(g, '', { x: 132, y: 84, class: 'meter-max-t comp-ink', 'font-size': 8, fill: '#5a6a78', 'text-anchor': 'middle' });
-      if (centerZero) text(g, '0', { x: 85, y: 44, class: 'comp-ink', 'font-size': 8, fill: '#5a6a78', 'text-anchor': 'middle' });
-      text(g, symbol, { x: 85, y: 74, class: 'comp-ink', 'font-size': 17, fill: '#33414f', 'text-anchor': 'middle' });
+      text(g, symbol, { x: 85, y: 93, class: 'comp-ink', 'font-size': 15, fill: '#33414f', 'text-anchor': 'middle' });
       const needle = el('g', { class: 'needle-g' }, g);
-      line(needle, 85, 96, 85, 50, '#d0432f', 2);
-      circle(g, 85, 96, 4, '#3a3f46', '#23272c', 1);
-      label(g, name, 85, 118, 9.5, '#5a6a78');
-      text(g, '', { x: 85, y: 131, class: 'meter-val comp-ink', 'font-size': 8.5, fill: '#33414f', 'text-anchor': 'middle' });
+      line(needle, 85, 103, 85, 52, '#d0432f', 2);
+      circle(g, 85, 103, 4, '#3a3f46', '#23272c', 1);
+      nameLabel(g, name, 85, 119, 9);
+      text(g, '', { x: 85, y: 132, class: 'meter-val comp-ink', 'font-size': 7.8, fill: '#33414f', 'text-anchor': 'middle' });
       rect(g, 8, 136, 154, 20, 6, '#e5e0cf', '#cfc6ae', 1.2);
     },
     update(g, comp, result) {
       const ranges = DEFS[type].ranges;
       const range = result?.range ?? ranges.low;
       const reading = result?.reading ?? 0;
-      const minT = g.querySelector('.meter-min-t');
-      const maxT = g.querySelector('.meter-max-t');
-      maxT.textContent = `${range}`;
-      minT.textContent = centerZero ? `−${range}` : '0';
       const frac = reading / range;
       const angle = centerZero
         ? Math.max(-1, Math.min(1, frac)) * 52
-        : (frac < 0 ? Math.max(frac, -0.1) * 110 : -55 + Math.min(1.05, frac) * 110);
-      g.querySelector('.needle-g').setAttribute('transform', `rotate(${angle} 85 96)`);
-      g.querySelector('.meter-val').textContent = result?.rangeLabel ? `${fmt(reading)} · ${result.rangeLabel}` : '未接入电路';
+        : -60 + Math.max(-0.06, Math.min(1.04, frac)) * 120;
+      g.querySelector('.needle-g').setAttribute('transform', `rotate(${angle} 85 103)`);
+      g.querySelector('.meter-val').textContent = result?.connectionError
+        ? '接线错误：负柱 + 一个正柱'
+        : result?.rangeLabel
+          ? `${fmt(reading)} · ${result.rangeLabel}${result.reversed ? ' · 极性反接' : ''}`
+          : '未接入电路';
       g.classList.toggle('overrange', !!result?.overrange);
+      g.classList.toggle('meter-reversed', !!result?.reversed);
     }
   };
 }
@@ -516,6 +549,42 @@ export class BenchView {
       : Math.min(WORLD.y + WORLD.h - vs.h, Math.max(WORLD.y, vs.y));
     this.svg.setAttribute('viewBox', `${vs.x} ${vs.y} ${vs.w} ${vs.h}`);
     this.svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    this.syncTerminalTargets();
+  }
+
+  // 元件随取景缩放，但接线柱保持稳定的屏幕可见尺寸与触控面积。
+  syncTerminalTargets() {
+    if (!this.termLayer) return;
+    const rect = this.svg.getBoundingClientRect();
+    if (!rect.width) return;
+    const worldPerPx = this.viewState.w / rect.width;
+    const touch = (navigator.maxTouchPoints > 0 || matchMedia('(pointer: coarse)').matches);
+    const terminalR = (touch ? 7 : 6) * worldPerPx;
+    const dotR = 2 * worldPerPx;
+    // 手机端命中圈根据同一元件接线柱间距自适应：元件缩小时不会互相覆盖并吞掉本体点击。
+    for (const group of this.termLayer.querySelectorAll('.term-g')) {
+      const hits = [...group.querySelectorAll('.terminal-hit')];
+      for (const node of hits) {
+        let nearestPx = Infinity;
+        const x = Number(node.getAttribute('cx')), y = Number(node.getAttribute('cy'));
+        for (const other of hits) {
+          if (other === node) continue;
+          const distancePx = Math.hypot(
+            Number(other.getAttribute('cx')) - x,
+            Number(other.getAttribute('cy')) - y
+          ) / worldPerPx;
+          nearestPx = Math.min(nearestPx, distancePx);
+        }
+        const hitPx = touch
+          ? Math.max(9, Math.min(18, Number.isFinite(nearestPx) ? nearestPx * .36 : 18))
+          : 19;
+        node.setAttribute('r', hitPx * worldPerPx);
+      }
+    }
+    this.termLayer.querySelectorAll('.terminal').forEach(node => node.setAttribute('r', terminalR));
+    this.termLayer.querySelectorAll('.terminal-dot').forEach(node => node.setAttribute('r', dotR));
+    this.wireLayer?.querySelectorAll('.wire-hit').forEach(node =>
+      node.setAttribute('stroke-width', 28 * worldPerPx));
   }
 
   panBy(dxPx, dyPx) {
@@ -561,10 +630,14 @@ export class BenchView {
     x1 -= pad; y1 -= pad; x2 += pad; y2 += pad;
     const V = vp ?? { L: rect.left, T: rect.top, R: rect.right, B: rect.bottom };
     const availW = Math.max(200, V.R - V.L), availH = Math.max(160, V.B - V.T);
+    // 视觉中心略低于几何中心：给顶栏留出呼吸空间，也避免最高处的电表被标题遮住。
+    // 同时从可用高度中扣除两倍偏移，保证下移后底部元件仍不会撞到运输条。
+    const opticalBiasY = Math.min(54, availH * 0.075);
     const sDef = rect.width / DEFAULT_VIEW.w; // 默认 1.5 倍基准（屏幕 px / 世界单位）
-    const s = Math.min(sDef, availW / (x2 - x1), availH / (y2 - y1));
+    const s = Math.min(sDef, availW / (x2 - x1), Math.max(120, availH - opticalBiasY * 2) / (y2 - y1));
     const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
-    const pcx = (V.L + V.R) / 2 - rect.left, pcy = (V.T + V.B) / 2 - rect.top;
+    const pcx = (V.L + V.R) / 2 - rect.left;
+    const pcy = (V.T + V.B) / 2 - rect.top + opticalBiasY;
     this.viewState = { x: cx - pcx / s, y: cy - pcy / s, w: rect.width / s };
     this.applyViewBox();
   }
@@ -579,7 +652,17 @@ export class BenchView {
     for (const c of bench.components) this.addComponentView(c);
   }
 
-  geometryOf(comp) { return GEOMETRY[comp.type]; }
+  geometryOf(comp) {
+    const base = GEOMETRY[comp.type];
+    if (!base || !comp?.flipped || !HORIZONTALLY_FLIPPABLE.has(comp.type)) return base;
+    return {
+      ...base,
+      terms: Object.fromEntries(Object.entries(base.terms).map(([name, terminal]) => [
+        name,
+        { ...terminal, x: base.w - terminal.x }
+      ]))
+    };
+  }
 
   terminalPos(compId, term) {
     const comp = this.bench.components.find(c => c.id === compId);
@@ -601,7 +684,28 @@ export class BenchView {
     // 选中框 + 命中底板
     el('rect', { x: -6, y: -6, width: geo.w + 12, height: geo.h + 12, rx: 10, fill: 'none', class: 'sel-ring' }, g);
     el('rect', { x: -6, y: -6, width: geo.w + 12, height: geo.h + 12, fill: 'transparent', class: 'comp-hit' }, g);
-    geo.draw(g, comp);
+    const visual = el('g', {
+      class: 'comp-visual',
+      transform: comp.flipped && HORIZONTALLY_FLIPPABLE.has(comp.type)
+        ? `translate(${geo.w} 0) scale(-1 1)`
+        : ''
+    }, g);
+    geo.draw(visual, comp);
+    // 名称标签统一为每个元件一个，并放在元件包围框下方，避免遮挡实物图形。
+    const names = [...visual.querySelectorAll('.component-name')];
+    names.slice(1).forEach(node => node.remove());
+    if (names[0]) {
+      names[0].setAttribute('x', geo.w / 2);
+      names[0].setAttribute('y', geo.h + 18);
+      names[0].setAttribute('text-anchor', 'middle');
+    }
+    // 形状随元件镜像，但名称、数值和极性文字保持正向可读。
+    if (comp.flipped && HORIZONTALLY_FLIPPABLE.has(comp.type)) {
+      visual.querySelectorAll('text').forEach(node => {
+        const x = Number(node.getAttribute('x') ?? 0);
+        node.setAttribute('transform', `translate(${2 * x} 0) scale(-1 1)`);
+      });
+    }
     geo.update?.(g, comp, null);
     // 接线柱在独立顶层：盖住导线端头，始终可点
     const tg = el('g', { class: 'term-g', id: `term-${comp.id}`, transform: `translate(${comp.x}, ${comp.y})` }, this.termLayer);
@@ -616,6 +720,7 @@ export class BenchView {
         });
       }
     }
+    this.syncTerminalTargets();
     return g;
   }
 
@@ -632,6 +737,9 @@ export class BenchView {
     this.termLayer.querySelector(`#term-${CSS.escape(comp.id)}`)?.remove();
     const g = this.addComponentView(comp);
     if (selected) g.classList.add('selected');
+    for (const wire of this.bench.wires) {
+      if (wire.a.comp === comp.id || wire.b.comp === comp.id) this.updateWirePath(wire);
+    }
   }
 
   moveComponent(id, x, y) {
@@ -659,6 +767,7 @@ export class BenchView {
     el('path', { d: this.wirePath(w), class: 'wire-hit', 'data-wire': w.id }, g);
     el('path', { d: this.wirePath(w), class: 'wire-casing' }, g);
     el('path', { d: this.wirePath(w), class: 'wire-core' }, g);
+    this.syncTerminalTargets();
   }
 
   removeWireView(id) {
@@ -681,6 +790,71 @@ export class BenchView {
       const geo = this.geometryOf(comp);
       geo.update?.(g, comp, results?.comps.get(comp.id) ?? null);
     }
+  }
+
+  // 故障可视化：短路整条红色，高风险元件橙色，未接接线柱黄色。
+  updateFaults(results, bench, { showOpen = false } = {}) {
+    this.compLayer.querySelectorAll('.fault-short, .fault-warning').forEach(node =>
+      node.classList.remove('fault-short', 'fault-warning'));
+    this.wireLayer.querySelectorAll('.fault-short, .fault-warning').forEach(node =>
+      node.classList.remove('fault-short', 'fault-warning'));
+    this.termLayer.querySelectorAll('.terminal.fault-open').forEach(node => node.classList.remove('fault-open'));
+
+    const shortIds = new Set(results?.events?.find(event => event.type === 'short')?.ids ?? []);
+    for (const id of shortIds) {
+      this.compLayer.querySelector(`#comp-${CSS.escape(id)}`)?.classList.add('fault-short');
+      this.wireLayer.querySelector(`#wire-${CSS.escape(id)}`)?.classList.add('fault-short');
+    }
+    for (const event of results?.events ?? []) {
+      if (!event.id || ![
+        'fuse-blown', 'overpower', 'overrange', 'meter-terminal',
+        'meter-reversed', 'ammeter-parallel', 'voltmeter-series', 'diode-reversed'
+      ].includes(event.type)) continue;
+      this.compLayer.querySelector(`#comp-${CSS.escape(event.id)}`)?.classList.add('fault-warning');
+      for (const wireId of event.wireIds ?? []) {
+        this.wireLayer.querySelector(`#wire-${CSS.escape(wireId)}`)?.classList.add('fault-warning');
+      }
+    }
+
+    const wired = new Set();
+    for (const wire of bench.wires) {
+      wired.add(`${wire.a.comp}:${wire.a.term}`);
+      wired.add(`${wire.b.comp}:${wire.b.term}`);
+    }
+    const openTerms = [];
+    const mark = (comp, term) => {
+      if (wired.has(`${comp.id}:${term}`)) return;
+      openTerms.push({ comp: comp.id, term });
+      this.termLayer.querySelector(`.terminal[data-comp="${CSS.escape(comp.id)}"][data-term="${CSS.escape(term)}"]`)?.classList.add('fault-open');
+    };
+    for (const comp of bench.components) {
+      const def = DEFS[comp.type];
+      const usedCount = def.terminals.filter(term => wired.has(`${comp.id}:${term}`)).length;
+      // 尚未开始接线的独立元件不是“断路故障”，避免学生刚摆元件就满屏黄点。
+      if (usedCount === 0) continue;
+      if (def.kind === 'meter') {
+        mark(comp, 'minus');
+        if (!wired.has(`${comp.id}:low`) && !wired.has(`${comp.id}:high`)) {
+          mark(comp, 'low');
+          mark(comp, 'high');
+        }
+      } else if (comp.type === 'spdt-switch') {
+        mark(comp, 'com');
+        if (!wired.has(`${comp.id}:x`) && !wired.has(`${comp.id}:y`)) {
+          mark(comp, 'x');
+          mark(comp, 'y');
+        }
+      } else if (comp.type === 'rheostat') {
+        const used = def.terminals.filter(term => wired.has(`${comp.id}:${term}`));
+        if (used.length < 2) def.terminals.forEach(term => mark(comp, term));
+      } else {
+        def.terminals.forEach(term => mark(comp, term));
+      }
+    }
+    if (!showOpen) {
+      this.termLayer.querySelectorAll('.terminal.fault-open').forEach(node => node.classList.remove('fault-open'));
+    }
+    return { shortIds: [...shortIds], openTerms };
   }
 
   setSelected(kind, id) {
@@ -714,6 +888,9 @@ export class BenchView {
     this.clearTerminalStates();
     if (compId) {
       this.termLayer.querySelector(`.terminal[data-comp="${CSS.escape(compId)}"][data-term="${CSS.escape(term)}"]`)?.classList.add('armed');
+      this.termLayer.querySelectorAll(`.terminal[data-comp="${CSS.escape(compId)}"]`).forEach(node => {
+        if (node.dataset.term !== term) node.classList.add('blocked');
+      });
     }
   }
   setTerminalSnap(compId, term) {
@@ -723,7 +900,15 @@ export class BenchView {
     }
   }
   clearTerminalStates() {
-    this.termLayer.querySelectorAll('.terminal.armed, .terminal.snap').forEach(n => n.classList.remove('armed', 'snap'));
+    this.termLayer.querySelectorAll('.terminal.armed, .terminal.snap, .terminal.blocked')
+      .forEach(n => n.classList.remove('armed', 'snap', 'blocked'));
+  }
+
+  flashInvalidConnection(compId) {
+    if (!compId) return;
+    const nodes = [...this.termLayer.querySelectorAll(`.terminal[data-comp="${CSS.escape(compId)}"]`)];
+    nodes.forEach(node => node.classList.add('invalid-connection'));
+    setTimeout(() => nodes.forEach(node => node.classList.remove('invalid-connection')), 700);
   }
 
   // 坐标换算：屏幕 → bench 坐标系（viewBox 变化自动生效）

@@ -15,6 +15,7 @@ const VIEWS = [
 export function attachTransport(ui, hooks) {
   const flowBtn = $('flow-button');
   const viewBtn = $('view-button');
+  const labelsBtn = $('labels-button');
   const resetBtn = $('reset-button');
 
   flowBtn.addEventListener('click', () => {
@@ -31,6 +32,14 @@ export function attachTransport(ui, hooks) {
     viewBtn.querySelector('b').textContent = VIEWS[idx][1];
     viewBtn.classList.toggle('active', ui.view === 'schematic');
     hooks.onViewChange?.(ui.view);
+  });
+
+  labelsBtn.addEventListener('click', () => {
+    ui.labelsVisible = !ui.labelsVisible;
+    labelsBtn.querySelector('b').textContent = `标签 · ${ui.labelsVisible ? '开' : '关'}`;
+    labelsBtn.classList.toggle('active', ui.labelsVisible);
+    labelsBtn.setAttribute('aria-pressed', String(ui.labelsVisible));
+    hooks.onLabelsChange?.(ui.labelsVisible);
   });
 
   // 复位：两段确认，防误触

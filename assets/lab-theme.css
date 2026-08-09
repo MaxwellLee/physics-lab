@@ -42,3 +42,39 @@ main{position:relative;z-index:1}.hero{min-height:640px;padding:112px clamp(24px
 .cb-dot{position:absolute;left:18%;top:26%;width:7px;height:7px;margin:-3.5px;border-radius:50%;background:#ffd596;box-shadow:0 0 10px #ffd596;z-index:3;animation:cbFlow 6s linear infinite}
 @keyframes cbFlow{0%{left:18%;top:26%}25%{left:82%;top:26%}50%{left:82%;top:74%}75%{left:18%;top:74%}100%{left:18%;top:26%}}
 @media (prefers-reduced-motion:reduce){.cb-dot{animation:none}}
+.mobile-entry-note{display:none}
+
+/* 手机实验库：入口优先，保留统一的深空视觉语言。 */
+@media(max-width:700px){
+  body:before{background-size:46px 46px}
+  .site-header{height:62px;padding:0 16px;position:sticky;top:0;background:rgba(5,8,16,.88);backdrop-filter:blur(16px)}
+  .brand{gap:9px}.brand-mark{width:30px;height:30px}.brand-mark i{width:23px;height:9px}
+  .brand b{font-size:14px}.brand small{font-size:7px}.status{display:none}
+  .hero{min-height:auto;padding:45px 18px 36px;overflow:hidden}
+  .eyebrow{font-size:9px}.eyebrow:before{width:22px}
+  .hero h1{font-size:clamp(34px,10.5vw,46px);line-height:1.12;margin:18px 0}
+  .hero>p{max-width:88%;font-size:14px;line-height:1.72;margin-bottom:24px}
+  .primary-action{min-width:210px;min-height:48px;padding:13px 16px 13px 18px}
+  .mobile-entry-note{display:block!important;margin:13px 0 0!important;font-size:11px!important;line-height:1.4!important;color:#6f8995!important;letter-spacing:.05em}
+  .hero-orbit{width:70vw;right:-37vw;top:55%;opacity:.34}
+  .collection{padding:38px 14px 44px}
+  .section-head{align-items:center;margin-bottom:18px}
+  .section-head h2{font-size:27px;margin-top:5px}.section-head p{display:none}
+  .experiment-grid{display:grid;gap:10px}
+  .experiment-card,.experiment-card.featured{min-height:0;display:grid;grid-template-columns:118px minmax(0,1fr);border-radius:8px;overflow:hidden;background:rgba(9,16,26,.9)}
+  .experiment-card.featured:hover{transform:none}
+  .card-visual{min-height:156px}
+  .scan-label{left:9px;bottom:9px;font-size:6px;letter-spacing:.1em}
+  .card-copy{min-width:0;padding:15px 14px 13px}
+  .card-meta{font-size:8px}.card-copy h3{font-size:21px;margin:17px 0 7px}
+  .card-copy p{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font-size:12px;line-height:1.6;margin:0}
+  .card-foot{margin-top:12px;padding-top:10px;font-size:10px}.card-foot b{font-size:16px}
+  .principles{padding:40px 18px 50px;gap:0}.principles>div{margin:0;padding:20px 0}
+  .principles h3{margin-bottom:6px}.principles p{margin:0;font-size:12px;line-height:1.6}
+  footer{padding:24px 18px;display:block;line-height:1.8}
+}
+
+@media(max-width:380px){
+  .experiment-card,.experiment-card.featured{grid-template-columns:104px minmax(0,1fr)}
+  .card-copy{padding-left:12px;padding-right:12px}.card-copy h3{font-size:19px}
+}

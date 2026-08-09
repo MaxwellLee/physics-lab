@@ -57,6 +57,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 .comp-item { width: 100%; display: grid; grid-template-columns: 26px 1fr; gap: 9px; align-items: center; border: 1px solid transparent; border-radius: 6px; background: transparent; text-align: left; padding: 8px 9px; color: #41586c; touch-action: pan-y }
 .drag-ghost { position: fixed; z-index: 60; transform: translate(-50%, -130%); display: flex; align-items: center; gap: 7px; padding: 7px 12px; border: 1px solid var(--accent); border-radius: 7px; background: var(--panel); backdrop-filter: blur(10px); box-shadow: 0 10px 30px rgba(14, 134, 198, .3); pointer-events: none; font-size: 12px; color: var(--text); white-space: nowrap }
 .drag-ghost i { width: 22px; height: 22px; border: 1px solid var(--accent); border-radius: 4px; display: grid; place-items: center; font-style: normal; font-size: 10px; color: var(--accent) }
+.drag-ghost i svg { width: 22px; height: 18px }
+.comp-item.dragging-out { border-color: var(--accent); opacity: .6 }
 .comp-item:hover, .comp-item.armed { color: var(--text); border-color: rgba(14, 134, 198, .35); background: var(--accent-soft) }
 .comp-item > i { width: 22px; height: 22px; border: 1px solid currentColor; border-radius: 4px; display: grid; place-items: center; font-style: normal; font-size: 10px }
 .comp-item b { font-size: 12px; font-weight: 500 }
@@ -133,20 +135,39 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 .transport button span { font-size: 16px }
 .transport button b { font-size: 12.5px; font-weight: 500; white-space: nowrap }
 .transport small { font-size: 9.5px; color: var(--muted); letter-spacing: .08em; white-space: nowrap }
+.more-controls { display: contents }
+.more-button, .fullscreen-primary { display: none !important }
+.fullscreen-coach { display: none }
+
+/* —— 手机方向提示与首次操作引导 —— */
+.orientation-gate { position: fixed; z-index: 100; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: max(24px, env(safe-area-inset-top)) 28px max(24px, env(safe-area-inset-bottom)); background: radial-gradient(circle at 50% 42%, rgba(255,255,255,.62), transparent 36%), #a9c9f0; text-align: center }
+.orientation-gate[hidden], .mobile-tutorial[hidden] { display: none !important }
+.orientation-gate small { color: var(--accent); font-size: 10px; letter-spacing: .22em }
+.orientation-gate h1 { margin: 12px 0 8px; font-size: 25px; font-weight: 520; letter-spacing: .04em }
+.orientation-gate p { max-width: 330px; margin: 0; color: #4e6579; font-size: 14px; line-height: 1.75 }
+.orientation-gate button { min-width: 210px; min-height: 50px; margin-top: 24px; border: 1px solid var(--accent); border-radius: 7px; background: rgba(255,255,255,.65); color: var(--accent); font-size: 14px; font-weight: 600 }
+.orientation-gate a { margin-top: 18px; color: #50677a; font-size: 12px; text-decoration: none }
+.phone-turn { position: relative; width: 92px; height: 92px; margin-bottom: 24px }
+.phone-turn span { position: absolute; left: 28px; top: 15px; width: 38px; height: 64px; border: 3px solid var(--accent); border-radius: 8px; transform: rotate(68deg); background: rgba(255,255,255,.35); box-shadow: inset 0 0 0 4px rgba(14,134,198,.08) }
+.phone-turn i { position: absolute; right: -2px; top: -5px; color: var(--accent); font-size: 29px; font-style: normal }
+.mobile-tutorial { position: fixed; z-index: 35; left: 50%; bottom: 78px; width: min(440px, calc(100vw - 28px)); transform: translateX(-50%); padding: 14px 16px; border: 1px solid rgba(14,134,198,.45); border-radius: 9px; background: rgba(255,255,255,.95); box-shadow: 0 16px 48px rgba(40,70,100,.26); backdrop-filter: blur(16px) }
+.mobile-tutorial b { color: var(--accent); font-size: 12px; letter-spacing: .08em }
+.mobile-tutorial ol { display: flex; gap: 18px; margin: 9px 0 12px; padding-left: 20px; color: #41586c; font-size: 11px }
+.mobile-tutorial button { width: 100%; min-height: 40px; border: 1px solid rgba(14,134,198,.4); border-radius: 6px; background: var(--accent-soft); color: var(--accent); font-size: 12px }
 
 /* —— 底部参数条 —— */
-.param-bar { position: fixed; z-index: 18; left: 50%; bottom: 96px; transform: translateX(-50%); display: flex; align-items: center; gap: 16px; max-width: min(920px, calc(100vw - 40px)); padding: 10px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); backdrop-filter: blur(15px); box-shadow: 0 12px 34px rgba(60, 80, 100, .2) }
+.param-bar { position: fixed; z-index: 18; top: 92px; right: 16px; bottom: auto; left: auto; transform: none; display: flex; flex-direction: column; align-items: stretch; gap: 10px; width: min(290px, calc(100vw - 32px)); max-height: calc(100vh - 118px); overflow: auto; padding: 13px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); backdrop-filter: blur(15px); box-shadow: 0 12px 34px rgba(60, 80, 100, .2) }
 .param-bar[hidden] { display: none !important }
-.param-bar .param-title { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; padding-right: 14px; border-right: 1px solid var(--line) }
+.param-bar .param-title { font-size: 12px; font-weight: 600; color: var(--text); white-space: normal; padding: 0 34px 9px 0; border-right: 0; border-bottom: 1px solid var(--line) }
 .param-bar .param-note { font-size: 11px; color: var(--muted); white-space: nowrap }
-.param-bar .param-row { display: grid; grid-template-columns: auto minmax(120px, 200px) 74px; gap: 9px; align-items: center; font-size: 11px; color: #41586c }
-.param-bar .param-row span { white-space: nowrap }
+.param-bar .param-row { display: grid; grid-template-columns: minmax(0, 1fr) max-content; gap: 5px 8px; align-items: center; font-size: 11px; color: #41586c }
+.param-bar .param-row span { grid-column: 1 / -1; white-space: normal }
 .param-bar .param-row input[type="range"] { width: 100%; accent-color: var(--accent); height: 14px }
 .param-bar .param-row output { font-size: 11px; color: var(--text); text-align: right; white-space: nowrap }
-.param-bar .param-row:has(select) { grid-template-columns: auto minmax(150px, 230px) }
+.param-bar .param-row:has(select) { grid-template-columns: 1fr }
 .param-check { display: flex; gap: 8px; align-items: center; font-size: 11px; color: #41586c; cursor: pointer; white-space: nowrap }
 .param-check input { accent-color: var(--accent); width: 15px; height: 15px }
-.param-close { border: 0; background: transparent; color: var(--faint); font-size: 18px; padding: 2px 6px; margin-left: auto }
+.param-close { position: absolute; top: 7px; right: 7px; border: 0; background: transparent; color: var(--faint); font-size: 18px; padding: 2px 6px; margin-left: auto }
 .param-close:hover { color: var(--text) }
 
 /* —— 垃圾桶 —— */
@@ -179,6 +200,8 @@ dialog .tip { border-top: 1px solid var(--line); padding-top: 14px; color: var(-
 
 .schematic-note { position: absolute; z-index: 6; left: 50%; top: 90px; transform: translateX(-50%); font-size: 9px; letter-spacing: .14em; color: var(--muted) }
 .schematic-note[hidden] { display: none !important }
+#schematic-svg { cursor: grab; touch-action: none }
+#schematic-svg.panning { cursor: grabbing }
 
 /* —— SVG 元件与导线 —— */
 .comp { cursor: grab }
@@ -186,6 +209,14 @@ dialog .tip { border-top: 1px solid var(--line); padding-top: 14px; color: var(-
 .comp .sel-ring { stroke: transparent; stroke-width: 1.8 }
 .comp.selected .sel-ring { stroke: var(--accent); filter: drop-shadow(0 0 5px rgba(14, 134, 198, .55)) }
 .comp-ink { pointer-events: none; user-select: none }
+.component-name {
+  fill: #000 !important;
+  font-size: 15px !important;
+  font-weight: 400;
+  stroke: none;
+}
+#bench-svg.component-labels-hidden .component-name { display: none }
+#schematic-svg.component-labels-hidden .sch-label-layer { display: none }
 .term-label { font-size: 9.5px; font-weight: 600; text-anchor: middle; pointer-events: none; user-select: none }
 .term-label.pos { fill: #a33121 }
 .term-label.neg { fill: #33414f }
@@ -196,6 +227,8 @@ dialog .tip { border-top: 1px solid var(--line); padding-top: 14px; color: var(-
 .terminal-dot { fill: rgba(255, 255, 255, .75); pointer-events: none }
 .terminal:hover, .terminal.snap { fill: #7cc4ea; stroke: var(--accent) }
 .terminal.armed { fill: #7cc4ea; stroke: var(--accent); animation: termPulse 1s ease-in-out infinite }
+.terminal.blocked { fill: #b9bec4; stroke: #8a6670; cursor: not-allowed; opacity: .72 }
+.terminal.invalid-connection { fill: #ef6a5b !important; stroke: #a82418 !important; stroke-width: 4 !important; filter: drop-shadow(0 0 7px rgba(207, 48, 34, .7)) }
 @keyframes termPulse { 50% { stroke-width: 3.4 } }
 .wire-casing { fill: none; stroke: #8e3532; stroke-width: 9; stroke-linecap: round; pointer-events: none }
 .wire-core { fill: none; stroke: #c9594f; stroke-width: 5.6; stroke-linecap: round; pointer-events: none }
@@ -204,8 +237,23 @@ dialog .tip { border-top: 1px solid var(--line); padding-top: 14px; color: var(-
 .wire.selected .wire-casing { stroke: #0a6ea3 }
 .wire.selected .wire-core { stroke: #38a8e8 }
 .wire-draft { fill: none; stroke: var(--accent); stroke-width: 3; stroke-dasharray: 8 6; pointer-events: none; opacity: .9 }
-.flow-arrow { fill: #b96a00; stroke: rgba(255, 255, 255, .85); stroke-width: 1; pointer-events: none }
-.flow-dot { fill: #0a64c8; stroke: rgba(255, 255, 255, .9); stroke-width: 1.2; pointer-events: none }
+.flow-arrow {
+  fill: #ffb000;
+  stroke: #fff7cf;
+  stroke-width: 1.5;
+  pointer-events: none;
+  filter: drop-shadow(0 0 4px rgba(255,117,0,.95));
+}
+.flow-electron { pointer-events: none; filter: drop-shadow(0 0 5px rgba(0,126,255,.95)) }
+.flow-dot { fill: #087fff; stroke: #e6f7ff; stroke-width: 1.5; pointer-events: none }
+.flow-electron-minus {
+  fill: #fff;
+  stroke: none;
+  font-size: 12px;
+  font-weight: 800;
+  pointer-events: none;
+  user-select: none;
+}
 .needle { stroke: #d0432f }
 .meter-read { fill: #7fe0a8; font-family: "Consolas", "Courier New", monospace; user-select: none; pointer-events: none }
 .switch-state, .rheo-val, .specimen-label { pointer-events: none; user-select: none }
@@ -240,11 +288,18 @@ dialog .tip { border-top: 1px solid var(--line); padding-top: 14px; color: var(-
 
 /* 电路图视图（白底黑线，教材样式） */
 .sch-wire { fill: none; stroke: #1a2430; stroke-width: 1.8; vector-effect: non-scaling-stroke }
+.sch-wire-layer, .sch-label-layer { pointer-events: none }
+.sch-wire.fault-short { stroke: #e22f25; stroke-width: 3; filter: drop-shadow(0 0 4px rgba(226,47,37,.45)) }
 .sch-sym { fill: none; stroke: #1a2430; stroke-width: 1.8; stroke-linecap: round; vector-effect: non-scaling-stroke }
 .sch-fill { fill: #1a2430; stroke: none }
 .sch-junction { fill: #1a2430 }
+.sch-junction { fill: #1a2430; stroke: none; vector-effect: non-scaling-stroke }
+.sch-component { cursor: move }
+#schematic-svg.dragging-component { cursor: move }
 .sch-label { fill: #46586a; font-size: 11.5px; text-anchor: middle; user-select: none }
 .sch-title { fill: #33465a; font-size: 12px; letter-spacing: .1em }
+.sch-component.fault-short .sch-sym { stroke: #e22f25; stroke-width: 3.2; filter: drop-shadow(0 0 5px rgba(226,47,37,.55)) }
+.sch-component.fault-warning .sch-sym { stroke: #e58b18; stroke-width: 2.8 }
 
 /* —— 加载层 —— */
 .loading { position: fixed; z-index: 50; inset: 0; background: #a9c9f0; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity .8s, visibility .8s }
@@ -282,8 +337,8 @@ dialog .tip { border-top: 1px solid var(--line); padding-top: 14px; color: var(-
   .transport button b { font-size: 10.5px }
   .transport small { font-size: 8.5px }
   .model-info { right: 10px; bottom: 94px }
-  .param-bar { bottom: 92px; flex-wrap: wrap; gap: 10px; padding: 10px 12px }
-  .param-bar .param-title { border: 0; padding: 0; width: 100% }
+  .param-bar { top: 76px; right: 10px; bottom: auto; gap: 9px; padding: 10px 12px }
+  .param-bar .param-title { width: auto }
   .trash-bin { left: 10px; right: auto; bottom: 96px }
   .event-banner { top: 72px }
 }
@@ -302,4 +357,207 @@ dialog .tip { border-top: 1px solid var(--line); padding-top: 14px; color: var(-
   .comp.active-load .bell-waves path { opacity: .7 }
   .trash-bin, .trash-bin .trash-lid { transition: none }
   * { transition-duration: .01s !important }
+}
+
+/* 手机横屏工作台：面板是抽屉，底部只保留三个高频入口。 */
+@media (max-width: 1000px) and (max-height: 600px) and (orientation: landscape) {
+  body.mobile-lab button, body.mobile-lab a { touch-action: manipulation }
+  body.mobile-lab .topbar { height: 52px; padding: 0 max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left)) }
+  body.mobile-lab .back { min-width: 48px; min-height: 48px; align-items: center; font-size: 12px }
+  body.mobile-lab .back span, body.mobile-lab .title-lockup small { display: none }
+  body.mobile-lab .title-lockup h1 { font-size: 15px; letter-spacing: .1em }
+  body.mobile-lab .top-status span { display: none }
+  body.mobile-lab .top-status { gap: 5px; font-size: 8px }
+  body.mobile-lab .top-status b { padding-left: 6px }
+  body.mobile-lab .library-panel,
+  body.mobile-lab .inspector-panel { top: 60px; bottom: 70px; max-height: none; z-index: 24; border-radius: 8px; box-shadow: 0 12px 34px rgba(40,60,80,.3) }
+  body.mobile-lab .library-panel { left: max(8px, env(safe-area-inset-left)); right: auto; width: 222px; padding: 13px }
+  body.mobile-lab .inspector-panel { right: max(8px, env(safe-area-inset-right)); width: min(310px, calc(100vw - 28px)); padding: 16px 15px }
+  body.mobile-lab .panel-kicker, body.mobile-lab .insp-kicker { margin-bottom: 9px; font-size: 12px }
+  body.mobile-lab .library-tabs { margin-bottom: 7px }
+  body.mobile-lab .library-tabs button { min-height: 42px; padding: 6px; font-size: 11px }
+  body.mobile-lab .cat-group { margin-bottom: 5px }
+  body.mobile-lab .cat-group > small { margin: 7px 0 3px }
+  body.mobile-lab .comp-item { min-height: 48px; padding: 6px 7px; grid-template-columns: 27px 1fr }
+  body.mobile-lab .comp-item > i { width: 25px; height: 25px }
+  body.mobile-lab .comp-item b, body.mobile-lab .preset-item b { font-size: 12px }
+  body.mobile-lab .comp-item small, body.mobile-lab .preset-item small { font-size: 9.5px }
+  body.mobile-lab .preset-item { min-height: 50px; padding: 7px }
+  body.mobile-lab .panel-close { min-width: 44px; min-height: 44px; right: 2px; top: 0 }
+  body.mobile-lab .library-reopen,
+  body.mobile-lab .inspector-reopen { top: auto; bottom: calc(68px + env(safe-area-inset-bottom)); width: 58px; min-height: 48px; padding: 6px 8px; transform: none; flex-direction: row; justify-content: center; gap: 5px; background: rgba(255,255,255,.94) }
+  body.mobile-lab .library-reopen span,
+  body.mobile-lab .inspector-reopen span { writing-mode: horizontal-tb; letter-spacing: .04em; font-size: 11px }
+  body.mobile-lab .transport { left: 50%; bottom: max(5px, env(safe-area-inset-bottom)); width: auto; min-width: 326px; height: 58px; padding: 3px; justify-content: center }
+  body.mobile-lab .transport > button { display: flex; min-width: 80px; min-height: 48px; flex: 1 }
+  body.mobile-lab .transport > .more-button,
+  body.mobile-lab .transport > .fullscreen-primary { display: flex !important }
+  body.mobile-lab .transport button b { font-size: 11px }
+  body.mobile-lab .transport small { font-size: 8px }
+  body.mobile-lab .more-controls { position: absolute; right: 0; bottom: 64px; width: 248px; display: none; grid-template-columns: repeat(4, 1fr); padding: 5px; border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,.95); box-shadow: 0 12px 30px rgba(45,70,95,.25); backdrop-filter: blur(14px) }
+  body.mobile-lab .more-controls.open { display: grid }
+  body.mobile-lab .more-controls button { display: flex; min-width: 0; min-height: 50px; border-right: 1px solid var(--line) }
+  body.mobile-lab .transport > .fullscreen-primary.coach-highlight { position: relative; z-index: 2; border-radius: 6px; background: #0e86c6; color: #fff; animation: fullscreen-coach-pulse 1.35s ease-in-out infinite }
+  body.mobile-lab .transport > .fullscreen-primary.coach-highlight small { color: rgba(255,255,255,.9) }
+  body.mobile-lab .fullscreen-coach:not([hidden]) { position: absolute; right: 73px; bottom: 65px; width: 190px; min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 8px 8px 11px; border: 1px solid rgba(14,134,198,.48); border-radius: 8px; background: rgba(255,255,255,.97); color: var(--text); box-shadow: 0 12px 30px rgba(45,70,95,.24); backdrop-filter: blur(14px) }
+  body.mobile-lab .fullscreen-coach::after { content: ''; position: absolute; right: 34px; bottom: -6px; width: 10px; height: 10px; border-right: 1px solid rgba(14,134,198,.48); border-bottom: 1px solid rgba(14,134,198,.48); background: rgba(255,255,255,.97); transform: rotate(45deg) }
+  body.mobile-lab .fullscreen-coach > span { display: flex; min-width: 0; flex-direction: column; gap: 2px }
+  body.mobile-lab .fullscreen-coach b { color: var(--accent); font-size: 11px; font-weight: 600 }
+  body.mobile-lab .fullscreen-coach small { color: #536b7e; font-size: 9px; letter-spacing: 0 }
+  body.mobile-lab .fullscreen-coach button { position: relative; z-index: 1; min-width: 34px; min-height: 34px; flex: 0 0 34px; border: 0; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 18px }
+  body.mobile-lab .hint-bar { display: none }
+  body.mobile-lab .param-bar { top: 60px; right: max(7px, env(safe-area-inset-right)); bottom: auto; width: min(218px, calc(100vw - 122px)); max-width: none; max-height: calc(100vh - 132px); overflow: auto; flex-wrap: nowrap; gap: 7px; padding: 9px 10px }
+  body.mobile-lab .param-bar .param-title { width: auto; padding: 0 30px 7px 0 }
+  body.mobile-lab .param-bar .param-row { grid-template-columns: minmax(0, 1fr) max-content; gap: 3px 6px }
+  body.mobile-lab .param-close { min-width: 42px; min-height: 42px }
+  body.mobile-lab .model-info { right: max(8px, env(safe-area-inset-right)); bottom: calc(8px + env(safe-area-inset-bottom)); width: 48px; height: 48px }
+  body.mobile-lab .trash-bin { left: max(8px, env(safe-area-inset-left)); right: auto; bottom: calc(68px + env(safe-area-inset-bottom)); padding: 7px 10px }
+  body.mobile-lab .event-banner { top: 58px; max-width: calc(100vw - 24px); padding: 9px 12px }
+  body.mobile-lab .event-banner span { max-width: 52vw; font-size: 10px; line-height: 1.4 }
+  body.mobile-lab .event-banner button { min-height: 42px }
+  body.mobile-lab .object-summary { font-size: 12px }
+  body.mobile-lab .info-depth button, body.mobile-lab .sel-actions button, body.mobile-lab .concept-list button { min-height: 42px }
+  body.mobile-lab dialog { max-height: calc(100vh - 24px); padding: 22px }
+  body.mobile-lab dialog p { font-size: 12px }
+  body.mobile-lab .schematic-note { top: 59px }
+}
+
+@keyframes fullscreen-coach-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(14,134,198,.46) }
+  50% { box-shadow: 0 0 0 7px rgba(14,134,198,0) }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.mobile-lab .transport > .fullscreen-primary.coach-highlight { animation: none }
+}
+
+@media (max-height: 390px) and (orientation: landscape) {
+  body.mobile-lab .library-panel, body.mobile-lab .inspector-panel { bottom: 64px }
+  body.mobile-lab .transport { height: 54px }
+  body.mobile-lab .transport > button { min-height: 46px }
+  body.mobile-lab .mobile-tutorial { bottom: 66px }
+}
+
+/* —— 简化探索版：窄元件图标栏、紧凑参数/删除条、禁用长按选词 —— */
+html, body, #stage, #bench-svg, #schematic-svg, .topbar, .library-panel, .transport {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.library-panel {
+  width: 116px;
+  padding: 14px 10px 12px;
+  max-height: calc(100vh - 190px);
+}
+.library-panel:before { top: 18px; height: 34px }
+.panel-kicker { justify-content: center; padding: 0 24px 0 0; margin-bottom: 7px; font-size: 12px }
+.panel-kicker small { display: none }
+.library-scroll { scrollbar-width: thin }
+.part-group { display: grid; gap: 4px; padding: 7px 0 10px; border-top: 1px solid var(--line) }
+.part-group:first-child { border-top: 0; padding-top: 0 }
+.part-group > small { text-align: center; color: var(--faint); font-size: 8px; letter-spacing: .16em }
+.comp-item {
+  min-height: 72px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding: 5px 3px;
+  text-align: center;
+  touch-action: pan-y;
+}
+.comp-item .part-icon {
+  width: 62px;
+  height: 43px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  color: #31516a;
+}
+.comp-item .part-icon svg { width: 58px; height: 42px; display: block }
+.comp-item b { max-width: 88px; overflow: hidden; text-overflow: ellipsis; font-size: 10px; font-weight: 600; white-space: nowrap }
+.comp-item.armed {
+  border-color: var(--accent);
+  background: rgba(14,134,198,.16);
+  color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.comp-item.armed .part-icon { color: var(--accent) }
+.param-bar { gap: 9px; padding: 11px 12px }
+.param-bar .param-title { font-size: 11px }
+.param-bar .param-row { grid-template-columns: minmax(0, 1fr) max-content; gap: 5px 7px }
+.param-bar .select-param { grid-template-columns: 1fr }
+.param-action, .param-delete {
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 12px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.param-delete {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border-color: rgba(200,74,50,.48);
+  background: rgba(200,74,50,.1);
+  color: var(--danger);
+}
+.param-delete span { font-size: 20px; line-height: 1 }
+.param-flip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.param-flip span { font-size: 18px; line-height: 1 }
+.param-flip[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(14,134,198,.2);
+}
+.wire-params { min-width: 0; justify-content: center }
+.comp.fault-short .sel-ring, .wire.fault-short .wire-casing {
+  stroke: #e22f25 !important;
+  stroke-width: 5 !important;
+  filter: drop-shadow(0 0 8px rgba(226,47,37,.8));
+}
+.comp.fault-warning .sel-ring { stroke: #e58b18 !important; stroke-width: 4 !important }
+.wire.fault-warning .wire-casing {
+  stroke: #e58b18 !important;
+  stroke-width: 11 !important;
+  filter: drop-shadow(0 0 5px rgba(229,139,24,.7));
+}
+.terminal.fault-open { fill: #ffd34d !important; stroke: #d47c00 !important; stroke-width: 4 !important; filter: drop-shadow(0 0 7px #ffb321) }
+.terminal.fault-open + .terminal-dot { fill: #fff !important }
+.top-status i.caution { background: #e59a18; box-shadow: 0 0 8px rgba(229,154,24,.75) }
+.comp.active-load .bell-hammer { animation-duration: .15s }
+
+@media (max-width: 1000px) and (max-height: 600px) and (orientation: landscape) {
+  body.mobile-lab .library-panel {
+    left: max(20px, calc(env(safe-area-inset-left) + 8px));
+    top: 56px;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    width: 98px;
+    padding: 9px 7px;
+  }
+  body.mobile-lab .panel-kicker { justify-content: center; margin-bottom: 4px }
+  body.mobile-lab .part-group { gap: 2px; padding: 5px 0 7px }
+  body.mobile-lab .comp-item {
+    min-height: 54px;
+    display: flex;
+    grid-template-columns: none;
+    padding: 3px 2px;
+    touch-action: none;
+  }
+  body.mobile-lab .comp-item .part-icon { width: 54px; height: 33px }
+  body.mobile-lab .comp-item .part-icon svg { width: 50px; height: 33px }
+  body.mobile-lab .comp-item b { font-size: 9px }
+  body.mobile-lab .param-bar {
+    width: min(218px, calc(100vw - 122px));
+    min-height: 0;
+    max-height: calc(100vh - 132px);
+    gap: 7px;
+  }
+  body.mobile-lab .param-delete { min-height: 44px }
 }
