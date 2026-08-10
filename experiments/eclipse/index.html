@@ -83,12 +83,14 @@
     <p id="loading-title">正在建立天体坐标系</p>
     <small id="loading-detail">INITIALIZING ORBITAL MODEL</small>
     <div class="loading-error" id="loading-error" hidden>
-      <b>三维模型没有成功启动</b>
-      <p>请刷新页面；如果问题持续，请把这个画面截图发给我。</p>
+      <b>三维模型加载中断</b>
+      <p>请检查网络后重新加载；如果问题持续，请把这个画面截图发给我。</p>
+      <button id="loading-retry" type="button">重新加载</button>
     </div>
   </div>
   <script>
     window.__orbitalModelReady = false;
+    window.__orbitalModelBootStarted = false;
     window.__showOrbitalError = function (detail) {
       var loading = document.getElementById('loading');
       if (!loading || window.__orbitalModelReady) return;
@@ -97,16 +99,24 @@
       document.getElementById('loading-detail').textContent = detail || 'MODEL STARTUP ERROR';
       document.getElementById('loading-error').hidden = false;
     };
+    document.getElementById('loading-retry').addEventListener('click', function () {
+      window.location.reload();
+    });
     window.addEventListener('error', function (event) {
       window.__showOrbitalError(event.message || 'SCRIPT LOAD ERROR');
     });
     window.addEventListener('unhandledrejection', function () {
       window.__showOrbitalError('UNEXPECTED STARTUP ERROR');
     });
-    window.setTimeout(function () {
-      if (!window.__orbitalModelReady) window.__showOrbitalError('STARTUP TIMEOUT');
+    window.__orbitalSlowTimer = window.setTimeout(function () {
+      if (window.__orbitalModelReady) return;
+      document.getElementById('loading-title').textContent = '网络较慢，模型仍在加载';
+      document.getElementById('loading-detail').textContent = 'STILL LOADING · PLEASE WAIT';
     }, 8000);
+    window.__orbitalFailTimer = window.setTimeout(function () {
+      if (!window.__orbitalModelReady) window.__showOrbitalError('STARTUP TIMEOUT · RETRY AVAILABLE');
+    }, 30000);
   </script>
-  <script defer src="./app.bundle.js"></script>
+  <script defer src="./app.bundle.js" onerror="window.__showOrbitalError('MODEL SCRIPT LOAD ERROR')"></script>
 </body>
 </html>

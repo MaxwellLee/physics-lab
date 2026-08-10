@@ -1,12 +1,18 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import earthHighUrl from '../../assets/textures/earth_4096.jpg';
-import earthStandardUrl from '../../assets/textures/earth_2048.jpg';
-import moonHighUrl from '../../assets/textures/moon_4096.jpg';
-import moonStandardUrl from '../../assets/textures/moon_2048.jpg';
-import moonHeightUrl from '../../assets/textures/moon_height_1024.jpg';
-import cloudsUrl from '../../assets/textures/clouds_2048.png';
-import moonNearsideUrl from '../../assets/textures/moon_nearside_1024.png';
+
+window.__orbitalModelBootStarted = true;
+
+// Keep large NASA textures outside the startup bundle. The procedural maps below
+// make the model usable immediately while these optional assets load in the background.
+const textureBaseUrl = '../../assets/textures/';
+const earthHighUrl = `${textureBaseUrl}earth_4096.jpg`;
+const earthStandardUrl = `${textureBaseUrl}earth_2048.jpg`;
+const moonHighUrl = `${textureBaseUrl}moon_4096.jpg`;
+const moonStandardUrl = `${textureBaseUrl}moon_2048.jpg`;
+const moonHeightUrl = `${textureBaseUrl}moon_height_1024.jpg`;
+const cloudsUrl = `${textureBaseUrl}clouds_2048.png`;
+const moonNearsideUrl = `${textureBaseUrl}moon_nearside_1024.png`;
 
 const $ = (selector) => document.querySelector(selector);
 const canvas = $('#space-canvas');
@@ -137,7 +143,9 @@ const moon = new THREE.Mesh(new THREE.SphereGeometry(.52,64,40),moonMaterial);sc
 
 const textureLoader=new THREE.TextureLoader();
 const textureProfiles={standard:{earth:earthStandardUrl,moon:moonStandardUrl},high:{earth:earthHighUrl,moon:moonHighUrl}};
-const groundMoonImage=new Image();groundMoonImage.decoding='async';groundMoonImage.src=moonNearsideUrl;
+const groundMoonImage=new Image();groundMoonImage.decoding='async';
+let groundMoonRequested=false;
+function ensureGroundMoonTexture(){if(groundMoonRequested)return;groundMoonRequested=true;groundMoonImage.src=moonNearsideUrl}
 let textureLoadToken=0;
 function autoTextureQuality(){const memory=navigator.deviceMemory||8;return innerWidth<900||memory<=4||renderer.capabilities.maxTextureSize<4096?'standard':'high'}
 function loadPlanetTexture(url,color=true){return new Promise((resolve,reject)=>textureLoader.load(url,texture=>{if(color)texture.colorSpace=THREE.SRGBColorSpace;texture.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());resolve(texture)},undefined,reject))}
@@ -265,6 +273,7 @@ function enterGround(immediate=false){
   if(state.ground)return;
   const token=++state.viewTransitionToken;
   state.ground=true;
+  if(state.family==='lunar')ensureGroundMoonTexture();
   controls.enabled=false;
   groundCanvas.hidden=false;
   resizeGround();drawGround();
@@ -291,7 +300,7 @@ function leaveGround(){
   tweenCamera(defaultCameraPosition,defaultCameraTarget,1050);
   setTimeout(()=>{if(token!==state.viewTransitionToken)return;groundCanvas.hidden=true;controls.enabled=true;document.body.classList.remove('view-transitioning')},1080);
 }
-function setScenario(name){state.scenario=name;state.family=scenarios[name].family;state.time=-1.05;$('#time-slider').value=state.time;document.querySelectorAll('.preset').forEach(b=>b.classList.toggle('active',b.dataset.scenario===name));updateReadout();orbitalPositions();drawGround()}
+function setScenario(name){state.scenario=name;state.family=scenarios[name].family;state.time=-1.05;if(state.ground&&state.family==='lunar')ensureGroundMoonTexture();$('#time-slider').value=state.time;document.querySelectorAll('.preset').forEach(b=>b.classList.toggle('active',b.dataset.scenario===name));updateReadout();orbitalPositions();drawGround()}
 
 document.querySelectorAll('[data-family]').forEach(button=>button.addEventListener('click',()=>{state.family=button.dataset.family;document.querySelectorAll('[data-family]').forEach(b=>b.classList.toggle('active',b===button));$('#solar-presets').hidden=state.family!=='solar';$('#lunar-presets').hidden=state.family!=='lunar';setScenario(state.family==='solar'?'solar-total':'lunar-total')}));
 document.querySelectorAll('[data-scenario]').forEach(button=>button.addEventListener('click',()=>setScenario(button.dataset.scenario)));
@@ -300,7 +309,6 @@ $('#label-toggle').addEventListener('change',e=>state.showLabels=e.target.checke
 const qualityModes=['auto','high','standard'];
 try{const savedQuality=localStorage.getItem('physics-lab-quality');if(qualityModes.includes(savedQuality))state.quality=savedQuality}catch{}
 $('#quality-button').addEventListener('click',()=>{const next=qualityModes[(qualityModes.indexOf(state.quality)+1)%qualityModes.length];try{localStorage.setItem('physics-lab-quality',next)}catch{}applyTextureQuality(next)});
-applyTextureQuality(state.quality);
 $('#observe-button').addEventListener('click',()=>enterGround(false));$('#space-return').addEventListener('click',leaveGround);
 $('#time-slider').addEventListener('input',e=>{state.time=Number(e.target.value);state.playing=false;$('#play-button span').textContent='▶';updateReadout();drawGround()});
 $('#play-button').addEventListener('click',()=>{state.playing=!state.playing;$('#play-button span').textContent=state.playing?'Ⅱ':'▶'});
@@ -336,5 +344,9 @@ if(scenarios[requestedScenario]){
 if(params.has('t')){state.time=THREE.MathUtils.clamp(Number(params.get('t'))||0,-1.25,1.25);state.playing=false;$('#time-slider').value=state.time;$('#play-button span').textContent='▶';}
 if(params.get('view')==='ground')setTimeout(()=>enterGround(true),120);
 window.__orbitalModelReady=true;
+clearTimeout(window.__orbitalSlowTimer);
+clearTimeout(window.__orbitalFailTimer);
 setTimeout(()=>$('#loading').classList.add('done'),550);
 setTimeout(()=>$('#loading')?.remove(),1450);
+const startTextureLoad=()=>applyTextureQuality(state.quality);
+if('requestIdleCallback' in window)requestIdleCallback(startTextureLoad,{timeout:700});else setTimeout(startTextureLoad,0);
