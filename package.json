@@ -10,6 +10,7 @@
     "build:galaxy": "esbuild ./experiments/galaxy/app.js --bundle --format=iife --target=es2020 --minify --outfile=./experiments/galaxy/app.bundle.js",
     "build:circuit-bench": "esbuild ./experiments/circuit-bench/app.js --bundle --format=iife --target=es2020 --minify --outfile=./experiments/circuit-bench/app.bundle.js",
     "test:eclipse:browser": "node ./experiments/eclipse/tests/browser.smoke.mjs",
+    "test:galaxy:browser": "node ./experiments/galaxy/tests/browser.smoke.mjs",
     "test:circuit-bench": "node ./experiments/circuit-bench/tests/solver.test.mjs",
     "test:circuit-bench:browser": "node ./experiments/circuit-bench/tests/browser.smoke.mjs",
     "test:circuit-bench:mobile": "node ./experiments/circuit-bench/tests/browser.smoke.mobile.mjs"
