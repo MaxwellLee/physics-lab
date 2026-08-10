@@ -2,6 +2,10 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { OBJECTS, PLANETS, FEATURED_IDS, SYSTEM_IDS, SEARCH_IDS } from './data.js';
 
+window.__galaxyBootStarted = true;
+const canLoadExternalTextures = location.protocol !== 'file:';
+window.__galaxyTextureState = { pending:0, failed:0, skipped:!canLoadExternalTextures };
+
 const $ = id => document.getElementById(id);
 const canvas = $('universe');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true, powerPreference:'high-performance', alpha:false});
@@ -269,8 +273,20 @@ function createNeighborhood(){
 async function loadTexture(url){
   if(textureCache.has(url))return textureCache.get(url);
   const loader=new THREE.TextureLoader();
-  const promise=loader.loadAsync(url).then(t=>{t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());return t});
+  window.__galaxyTextureState.pending++;
+  const promise=loader.loadAsync(url)
+    .then(t=>{t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());return t})
+    .catch(error=>{window.__galaxyTextureState.failed++;throw error})
+    .finally(()=>window.__galaxyTextureState.pending--);
   textureCache.set(url,promise);return promise;
+}
+
+async function loadTextureWithFallback(primary,fallback){
+  try{return await loadTexture(primary)}catch(error){console.warn(`High-resolution texture failed: ${primary}`,error);return loadTexture(fallback)}
+}
+
+function applyTexture(material,map,opacity){
+  material.map=map;material.color.set(0xffffff);if(opacity!==undefined)material.opacity=opacity;material.needsUpdate=true;
 }
 
 function orbitRadius(a){return 7+Math.log2(1+a*3)*11}
@@ -303,20 +319,21 @@ function addUranusRings(mesh,scale){
   const g=new THREE.RingGeometry(scale*1.4,scale*1.95,96);const m=new THREE.MeshBasicMaterial({color:0x8fb6b8,transparent:true,opacity:.24,side:THREE.DoubleSide,depthWrite:false});const ring=new THREE.Mesh(g,m);ring.rotation.x=Math.PI/2;mesh.add(ring);
 }
 
-async function createSolarSystem(){
+function createSolarSystem(){
   const root=new THREE.Group();root.visible=false;roots.solar=root;scene.add(root);
   root.add(new THREE.AmbientLight(0x43505b,.2));
   const sunMat=new THREE.MeshBasicMaterial({color:0xffb64b});const sun=new THREE.Mesh(new THREE.SphereGeometry(4.2,48,32),sunMat);sun.userData={id:'sun',kind:'body'};root.add(sun);interactiveObjects.push(sun);solarBodies.set('sun',{mesh:sun,data:OBJECTS.sun});addSceneLabel(sun,'太阳','SUN · 太阳系中心','solar',-30);
   const sunGlow=sprite(makeGlowTexture('#fff8d8','#ff9b38','rgba(255,92,20,0)'),18,.8);sun.add(sunGlow);
   const light=new THREE.PointLight(0xfff0d2,450,260,1.1);root.add(light);
   for(let index=0;index<PLANETS.length;index++){
-    const p=PLANETS[index];let map=null;
-    if(p.texture){try{map=await loadTexture(p.texture)}catch(error){console.warn(`Texture failed: ${p.id}`,error)}}else map=makeUranusTexture();
+    const p=PLANETS[index];const map=p.texture?null:makeUranusTexture();
     const material=new THREE.MeshStandardMaterial({map,color:map?0xffffff:p.color,roughness:.83,metalness:0});
     const holder=new THREE.Group();holder.rotation.z=THREE.MathUtils.degToRad(p.tilt);root.add(holder);
     const mesh=new THREE.Mesh(new THREE.SphereGeometry(p.visual,40,24),material);mesh.userData={id:p.id,kind:'body'};holder.add(mesh);interactiveObjects.push(mesh);addSceneLabel(mesh,p.name,p.en,'solar',(index%3-1)*10);
+    if(p.texture&&canLoadExternalTextures)loadTexture(p.texture).then(texture=>applyTexture(material,texture)).catch(error=>console.warn(`Texture failed: ${p.id}`,error));
     if(p.id==='earth'){
-      try{const clouds=await loadTexture('../../assets/textures/clouds_2048.png');const cloudMesh=new THREE.Mesh(new THREE.SphereGeometry(p.visual*1.012,40,24),new THREE.MeshStandardMaterial({map:clouds,transparent:true,opacity:.55,depthWrite:false,roughness:1}));mesh.add(cloudMesh);mesh.userData.clouds=cloudMesh}catch{}
+      const cloudMaterial=new THREE.MeshStandardMaterial({transparent:true,opacity:0,depthWrite:false,roughness:1});const cloudMesh=new THREE.Mesh(new THREE.SphereGeometry(p.visual*1.012,40,24),cloudMaterial);mesh.add(cloudMesh);mesh.userData.clouds=cloudMesh;
+      if(canLoadExternalTextures)loadTexture('../../assets/textures/clouds_2048.png').then(texture=>applyTexture(cloudMaterial,texture,.55)).catch(error=>console.warn('Earth clouds failed',error));
     }
     if(p.id==='venus'){const haze=new THREE.Mesh(new THREE.SphereGeometry(p.visual*1.025,32,20),new THREE.MeshStandardMaterial({color:0xd9b46e,transparent:true,opacity:.28,depthWrite:false,roughness:1}));mesh.add(haze)}
     if(p.id==='saturn')addSaturnRings(mesh,p.visual);
@@ -327,21 +344,26 @@ async function createSolarSystem(){
   }
 }
 
-async function createEarthSystem(){
+function createEarthSystem(){
   const root=new THREE.Group();root.visible=false;roots.earth=root;scene.add(root);
   root.add(new THREE.AmbientLight(0x6a87a5,.32));const key=new THREE.DirectionalLight(0xfff1d2,3.4);key.position.set(-15,8,12);root.add(key);
-  let earthMap,moonMap,cloudMap;try{[earthMap,moonMap,cloudMap]=await Promise.all([loadTexture('../../assets/textures/earth_4096.jpg'),loadTexture('../../assets/textures/moon_4096.jpg'),loadTexture('../../assets/textures/clouds_2048.png')])}catch{[earthMap,moonMap,cloudMap]=await Promise.all([loadTexture('../../assets/textures/earth_2048.jpg'),loadTexture('../../assets/textures/moon_2048.jpg'),loadTexture('../../assets/textures/clouds_2048.png')])}
-  const earth=new THREE.Mesh(new THREE.SphereGeometry(4.2,64,40),new THREE.MeshStandardMaterial({map:earthMap,roughness:.78}));earth.rotation.z=THREE.MathUtils.degToRad(23.44);earth.userData={id:'earth',kind:'body'};root.add(earth);interactiveObjects.push(earth);addSceneLabel(earth,'地球','EARTH · 地月系中心','earth',-58);
-  const clouds=new THREE.Mesh(new THREE.SphereGeometry(4.25,64,40),new THREE.MeshStandardMaterial({map:cloudMap,transparent:true,opacity:.64,depthWrite:false,roughness:1}));earth.add(clouds);
+  const earthMaterial=new THREE.MeshStandardMaterial({color:0x3f789d,roughness:.78});const moonMaterial=new THREE.MeshStandardMaterial({color:0xb9b6aa,roughness:.95});const cloudMaterial=new THREE.MeshStandardMaterial({transparent:true,opacity:0,depthWrite:false,roughness:1});
+  const earth=new THREE.Mesh(new THREE.SphereGeometry(4.2,64,40),earthMaterial);earth.rotation.z=THREE.MathUtils.degToRad(23.44);earth.userData={id:'earth',kind:'body'};root.add(earth);interactiveObjects.push(earth);addSceneLabel(earth,'地球','EARTH · 地月系中心','earth',-58);
+  const clouds=new THREE.Mesh(new THREE.SphereGeometry(4.25,64,40),cloudMaterial);earth.add(clouds);
   const atmosphere=new THREE.Mesh(new THREE.SphereGeometry(4.34,48,32),new THREE.MeshBasicMaterial({color:0x55b9ff,transparent:true,opacity:.085,side:THREE.BackSide,depthWrite:false}));earth.add(atmosphere);
   const moonPlane=new THREE.Group();moonPlane.rotation.x=THREE.MathUtils.degToRad(5.1);root.add(moonPlane);
-  const moonHolder=new THREE.Group();moonPlane.add(moonHolder);const moon=new THREE.Mesh(new THREE.SphereGeometry(1.14,48,30),new THREE.MeshStandardMaterial({map:moonMap,roughness:.95}));moon.position.x=13;moon.userData={id:'moon',kind:'body'};moonHolder.add(moon);interactiveObjects.push(moon);
+  const moonHolder=new THREE.Group();moonPlane.add(moonHolder);const moon=new THREE.Mesh(new THREE.SphereGeometry(1.14,48,30),moonMaterial);moon.position.x=13;moon.userData={id:'moon',kind:'body'};moonHolder.add(moon);interactiveObjects.push(moon);
   const moonOrbit=new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(Array.from({length:160},(_,i)=>new THREE.Vector3(Math.cos(i/160*Math.PI*2)*13,0,Math.sin(i/160*Math.PI*2)*13))),new THREE.LineBasicMaterial({color:0x5a8294,transparent:true,opacity:.4}));moonPlane.add(moonOrbit);
   const contextGroup=new THREE.Group();root.add(contextGroup);const contextBodies=new Map();
   for(const id of ['sun',...PLANETS.filter(p=>p.id!=='earth').map(p=>p.id)]){
     const source=solarBodies.get(id);if(!source?.mesh)continue;const object=source.mesh.clone(true);const p=PLANETS.find(item=>item.id===id);const base=id==='sun'?4.2:p.visual;const contextSize=id==='sun'?1.05:.22+Math.sqrt(p.radius/69911)*.35;object.scale.setScalar(contextSize/base);object.userData={id,kind:'body'};contextGroup.add(object);interactiveObjects.push(object);contextBodies.set(id,{object,data:p});addSceneLabel(object,OBJECTS[id].name,`${OBJECTS[id].en} · 远景方向`,'earth',(contextBodies.size%3-1)*11);
   }
   root.userData={earth,clouds,moonPlane,moonHolder,moon,moonOrbit,contextGroup,contextBodies};updateEarthContext();
+  if(canLoadExternalTextures){
+    loadTextureWithFallback('../../assets/textures/earth_4096.jpg','../../assets/textures/earth_2048.jpg').then(texture=>applyTexture(earthMaterial,texture)).catch(error=>console.warn('Earth texture failed',error));
+    loadTextureWithFallback('../../assets/textures/moon_4096.jpg','../../assets/textures/moon_2048.jpg').then(texture=>applyTexture(moonMaterial,texture)).catch(error=>console.warn('Moon texture failed',error));
+    loadTexture('../../assets/textures/clouds_2048.png').then(texture=>applyTexture(cloudMaterial,texture,.64)).catch(error=>console.warn('Earth-system clouds failed',error));
+  }
 }
 
 let blackLensingMaterial,blackLensingPlane,blackOrbitGroup;
@@ -825,11 +847,12 @@ async function init(){
   const initial=location.hash.slice(1);
   updateLoading(8);createBackground();updateLoading(18,'正在生成银河旋臂','DISTRIBUTING STARS AND DUST');createGalaxy();
   updateLoading(28,'正在建立太阳邻域','ICRS J2000 / LIGHT-YEAR SCALE');createNeighborhood();
-  await createSolarSystem();updateLoading(82,'正在建立地月系统','LOADING EARTH–MOON SYSTEM');await createEarthSystem();
+  createSolarSystem();updateLoading(82,'正在建立地月系统','PREPARING EARTH–MOON SYSTEM');createEarthSystem();
   createBlackHole();updateLoading(94,'正在校准相机','CALIBRATING OBSERVATION SCALES');
   updateSolar();updateSystemStrip();renderCatalog();setMode('galaxy','galaxy',true);showInfo('galaxy');
   updateLoading(100,'银河坐标系已就绪','MODEL READY');
-  setTimeout(()=>{$('loading').classList.add('done');window.__galaxyReady=true},450);
+  window.__galaxyReady=true;clearTimeout(window.__galaxySlowTimer);clearTimeout(window.__galaxyFailTimer);
+  setTimeout(()=>$('loading').classList.add('done'),450);
   if(initial&&OBJECTS[initial]&&initial!=='galaxy')setTimeout(()=>navigateTo(initial),900);
   requestAnimationFrame(animate);
 }
