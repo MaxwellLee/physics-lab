@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,viewport-fit=cover">
+  <meta name="theme-color" content="#dcecf8">
+  <meta name="description" content="面向初中课堂的汽油机与柴油机四冲程三维交互实验">
+  <title>四冲程内燃机 · 物理实验室</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23e7f3fb'/%3E%3Ccircle cx='32' cy='40' r='13' fill='none' stroke='%230e86c6' stroke-width='3'/%3E%3Cpath d='M32 40 22 22h20z' fill='none' stroke='%23d97724' stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./style.css?v=20260826-classroom4">
+</head>
+<body>
+  <canvas id="engine-canvas" aria-label="汽油机与柴油机四冲程三维模型"></canvas>
+  <div class="grid-noise" aria-hidden="true"></div>
+  <div class="vignette" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <a class="back" href="../../" aria-label="返回实验库">← <span>实验库</span></a>
+    <div class="title-lockup"><small>EXPERIMENT 004</small><h1>四冲程内燃机</h1></div>
+    <div class="top-status"><i></i><span>THERMAL ENGINE MODEL</span><b>LIVE</b></div>
+  </header>
+
+  <nav class="engine-switch" aria-label="发动机类型">
+    <button class="active" data-engine="gasoline" type="button"><span>汽油机</span><small>火花点火</small></button>
+    <button data-engine="diesel" type="button"><span>柴油机</span><small>压缩点火</small></button>
+    <button data-engine="compare" type="button"><span>同步对比</span><small>结构差异</small></button>
+    <button data-engine="inline4" type="button"><span>四缸汽油机</span><small>真实应用</small></button>
+  </nav>
+
+  <aside class="lesson-panel" id="lesson-panel">
+    <button class="panel-close" id="lesson-close" type="button" aria-label="收起教学路径">×</button>
+    <div class="panel-kicker"><span>四冲程循环</span><small>720° CYCLE</small></div>
+    <div class="stroke-list" id="stroke-list">
+      <button class="active" data-stroke="0" type="button"><i>01</i><span><b>吸气冲程</b><small>INTAKE · 活塞向下</small></span><em></em></button>
+      <button data-stroke="1" type="button"><i>02</i><span><b>压缩冲程</b><small>COMPRESSION · 活塞向上</small></span><em></em></button>
+      <button data-stroke="2" type="button"><i>03</i><span><b>做功冲程</b><small>POWER · 活塞向下</small></span><em></em></button>
+      <button data-stroke="3" type="button"><i>04</i><span><b>排气冲程</b><small>EXHAUST · 活塞向上</small></span><em></em></button>
+    </div>
+    <div class="explode-control" id="explode-control" hidden>
+      <label for="explode-range"><span>零件分离程度</span><b id="explode-value">72%</b></label>
+      <input id="explode-range" type="range" min="0" max="100" value="72">
+    </div>
+    <div class="sound-control">
+      <label for="volume-range"><span>发动机音量</span><b id="volume-value">76%</b></label>
+      <input id="volume-range" type="range" min="0" max="100" value="76" aria-label="发动机音效音量">
+      <p id="sound-help">点击底部“音效”按钮后播放；声音会随演示速度同步变化。</p>
+    </div>
+    <div class="part-actions">
+      <button id="hide-part" type="button" disabled>隐藏所选</button>
+      <button id="restore-parts" type="button">恢复全部</button>
+    </div>
+    <p class="panel-note">点击模型零件显示名称和作用；点击空白处隐藏标注。拖动旋转，滚轮或双指缩放。手机横屏时对比模型左右排列，竖屏时上下排列。</p>
+  </aside>
+
+  <button class="lesson-reopen" id="lesson-reopen" type="button" hidden>☰ <span>四冲程</span></button>
+
+  <aside class="info-panel" id="info-panel" aria-live="polite">
+    <button class="panel-close" id="info-close" type="button" aria-label="收起讲解卡">×</button>
+    <div class="object-type" id="engine-type-label">SPARK IGNITION · GASOLINE</div>
+    <div class="energy-chain" aria-label="内燃机主要能量变化">
+      <span>燃料化学能</span><i>→</i><span>燃气内能</span><i>→</i><span>机械能</span>
+      <p>燃烧先使燃气内能增加，做功冲程再推动活塞和曲轴运动。</p>
+    </div>
+    <div class="stroke-heading"><div><small id="stroke-index">01 / 04</small><h2 id="stroke-name">吸气冲程</h2></div><b id="angle-value">0°</b></div>
+    <p class="stroke-summary" id="stroke-summary">进气门打开，活塞下行，汽缸容积增大。</p>
+    <dl class="metrics">
+      <div><dt>活塞</dt><dd id="piston-state">向下运动</dd></div>
+      <div><dt>气门</dt><dd id="valve-state">进气门打开</dd></div>
+      <div><dt>压强</dt><dd id="pressure-state">较低</dd></div>
+      <div><dt>温度</dt><dd id="temperature-state">较低</dd></div>
+    </dl>
+    <div class="process-card"><small>当前过程</small><p id="engine-process">吸入空气与汽油形成的混合气。</p></div>
+    <section class="comparison-table-wrap" id="comparison-table-wrap" hidden aria-labelledby="comparison-title">
+      <div class="comparison-heading"><small>同步结构与运动对比</small><h3 id="comparison-title">汽油机和柴油机的区别</h3></div>
+      <div class="compare-live" id="compare-live">当前同为吸气冲程：汽油机吸入混合气，柴油机只吸入空气。</div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>比较项目</th><th>汽油机</th><th>柴油机</th></tr></thead>
+          <tbody>
+            <tr><th>吸气冲程</th><td>吸入空气与汽油形成的混合气（黄色雾滴为教学示意）</td><td>只吸入空气</td></tr>
+            <tr><th>点火方式</th><td>火花塞产生电火花点燃</td><td>压缩末端由喷油嘴喷入柴油（黄色油滴为教学示意），随后自行燃烧</td></tr>
+            <tr><th>关键部件</th><td>火花塞</td><td>喷油嘴</td></tr>
+            <tr><th>压缩比</th><td>常见约 8∶1—12∶1，承压件相对轻薄</td><td>常见约 16∶1—22∶1，承压件通常更厚重</td></tr>
+            <tr><th>工作声音</th><td>通常较平顺</td><td>燃烧敲击感通常更明显</td></tr>
+            <tr><th>效率特点</th><td>同类条件下通常较低</td><td>因压缩程度较高，通常效率较高</td></tr>
+            <tr><th>常见应用</th><td>轿车、小型动力机械</td><td>货车、拖拉机、工程机械</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="compare-common"><b>共同点：</b>都是四冲程内燃机；完成一个循环时活塞往复四次、曲轴转两周，并且只有做功冲程对外做功。</p>
+    </section>
+    <div class="energy-card"><small>能量转化</small><p id="energy-copy">飞轮释放机械能，带动活塞运动。</p></div>
+    <div class="part-card" id="part-card">
+      <small>已选零件</small><div><b id="part-name">点击模型零件</b><em id="part-en">SELECT A COMPONENT</em></div>
+      <p id="part-description">可选择活塞、连杆、曲轴、气门、火花塞或喷油嘴。</p>
+    </div>
+    <div class="teaching-note" id="teaching-note">教学模型采用理想气门正时；黄色汽油雾滴、柴油喷雾的粒径与持续时间、燃气粒子、气门行程和零件间距均为便于观察的教学放大。</div>
+  </aside>
+  <button class="info-reopen" id="info-reopen" type="button" hidden>i <span>讲解</span></button>
+
+  <div class="model-labels" id="model-labels"></div>
+
+  <section class="inline4-status" id="inline4-status" aria-label="四个汽缸当前冲程" hidden>
+    <div class="cylinder-state power" data-cylinder="1"><b>1 缸</b><span>做功冲程</span></div>
+    <div class="cylinder-state exhaust" data-cylinder="2"><b>2 缸</b><span>排气冲程</span></div>
+    <div class="cylinder-state compression" data-cylinder="3"><b>3 缸</b><span>压缩冲程</span></div>
+    <div class="cylinder-state intake" data-cylinder="4"><b>4 缸</b><span>吸气冲程</span></div>
+  </section>
+
+  <div class="bottom-console">
+    <section class="transport" aria-label="模拟控制">
+      <button id="play-button" class="play" type="button"><span>Ⅱ</span><small>暂停</small></button>
+      <button id="speed-button" type="button"><b>1×</b><small>速度</small></button>
+      <button id="view-cycle-button" type="button" aria-label="当前剖视，点击切换观察方式"><b>剖视</b><small>观察方式</small></button>
+      <button id="audio-button" type="button" aria-pressed="false"><span>♪</span><small>开启音效</small></button>
+      <button id="reset-button" type="button"><span>↺</span><small>重置</small></button>
+    </section>
+
+    <section class="timeline-wrap" id="timeline-wrap" aria-label="四冲程时间轴">
+      <div class="timeline-labels"><span>吸气</span><span>压缩</span><span>做功</span><span>排气</span></div>
+      <input id="cycle-range" type="range" min="0" max="720" step="1" value="12" aria-label="曲轴角度">
+      <div class="timeline-scale"><i>0°</i><i>180°</i><i>360°</i><i>540°</i><i>720°</i></div>
+    </section>
+  </div>
+
+  <button class="model-info" id="model-info" type="button" aria-label="模型与物理说明">?</button>
+  <dialog id="model-dialog">
+    <button class="dialog-close" id="dialog-close" type="button" aria-label="关闭">×</button>
+    <small>MODEL &amp; PHYSICS NOTES</small>
+    <h2>模型与教学比例说明</h2>
+    <p>本实验包含单缸教学模型和直列四缸汽油机应用模型。每个汽缸完成一次四冲程循环时，活塞往复四次、曲轴共转两周。</p>
+    <p>汽油机按初中教材模型展示为吸入空气—燃油混合气，并在压缩冲程末端由火花塞点燃；柴油机吸气时只吸入空气，在压缩冲程末端喷油并依靠高温压缩空气引燃。</p>
+    <p><b>能量主线：</b>燃料的化学能在燃烧时转化为燃气的内能，高温高压燃气推动活塞做功，进一步转化为活塞、连杆和曲轴的机械能。排气、散热和声音也会把一部分能量传向环境。</p>
+    <p>只有做功冲程由燃气推动活塞并对外做功；其余三个冲程主要依靠飞轮储存的机械能维持。压缩冲程中，机械能转化为气体内能，气体温度升高。</p>
+    <p>真实发动机存在提前点火、延迟关闭和气门重叠。本模型为突出四冲程因果关系，采用理想化气门正时；气门行程、燃气粒子大小和拆解距离均非真实比例。</p>
+    <p><b>曲轴关系：</b>曲轴绕主轴颈中心线转动；与主轴颈不同心的曲柄销绕该轴线做圆周运动，并与连杆下端相连。四缸模式采用常见直列四缸的 1—3—4—2 做功顺序，1、4 缸活塞同相，2、3 缸活塞同相，两组相反。</p>
+    <p>部分现代汽油机采用缸内直喷。本实验仍按初中课程常用模型展示“吸入汽油与空气的混合气”，黄色雾滴只表示燃油随气流进入，并非真实粒径或供油结构。</p>
+    <p>音效参考汽油机与单缸柴油机启动、怠速录音的节奏特征，由程序实时合成；模拟转速改变时，基频和四冲程燃烧脉冲频率会同步改变。它不代表某一真实车型或真实声压级。</p>
+    <a href="https://www.energy.gov/cmei/vehicles/articles/internal-combustion-engine-basics" target="_blank" rel="noreferrer">美国能源部：Internal Combustion Engine Basics ↗</a>
+    <a href="https://www.grc.nasa.gov/WWW/K-12/airplane/engstage.html" target="_blank" rel="noreferrer">NASA Glenn：Internal Combustion Engine Stages ↗</a>
+    <a href="https://pubdocserve.sandia.gov/sand_doc/CSP/external/CSP-0988.pdf" target="_blank" rel="noreferrer">Sandia：曲轴主轴颈、曲柄销与偏心距示意 ↗</a>
+    <a href="https://www.cs.toronto.edu/~relu/tractor/CONTINENTAL-LHEAD-MANUAL.pdf" target="_blank" rel="noreferrer">Continental 四缸发动机手册：1—3—4—2 点火顺序 ↗</a>
+  </dialog>
+
+  <div class="loading" id="loading">
+    <div class="loading-engine" aria-hidden="true"><i></i><b></b><span></span></div>
+    <p id="loading-title">正在装配内燃机模型</p>
+    <small id="loading-detail">BUILDING PROCEDURAL COMPONENTS</small>
+    <div class="loading-bar"><i id="loading-progress"></i></div>
+    <div class="loading-error" id="loading-error" hidden><b>热机模型启动中断</b><p>请重新加载；如果问题持续，请把这个画面截图发给我。</p><button id="loading-retry" type="button">重新加载</button></div>
+  </div>
+
+  <script>
+    window.__heatEngineReady = false;
+    window.__showHeatEngineError = function (detail) {
+      if (window.__heatEngineReady) return;
+      var loading = document.getElementById('loading');
+      if (!loading) return;
+      loading.classList.add('failed');
+      document.getElementById('loading-title').textContent = '模型启动失败';
+      document.getElementById('loading-detail').textContent = detail || 'MODEL STARTUP ERROR';
+      document.getElementById('loading-error').hidden = false;
+    };
+    document.getElementById('loading-retry').addEventListener('click', function () { location.reload(); });
+    window.addEventListener('error', function (event) { window.__showHeatEngineError(event.message); });
+    window.addEventListener('unhandledrejection', function () { window.__showHeatEngineError('UNEXPECTED STARTUP ERROR'); });
+    window.__heatEngineSlowTimer = setTimeout(function () {
+      if (window.__heatEngineReady) return;
+      document.getElementById('loading-title').textContent = '模型仍在装配，请稍候';
+      document.getElementById('loading-detail').textContent = 'STILL BUILDING · PLEASE WAIT';
+    }, 8000);
+    window.__heatEngineFailTimer = setTimeout(function () {
+      if (!window.__heatEngineReady) window.__showHeatEngineError('STARTUP TIMEOUT · RETRY AVAILABLE');
+    }, 30000);
+  </script>
+  <script defer src="./app.bundle.js?v=20260827-classroom8" onerror="window.__showHeatEngineError('MODEL SCRIPT LOAD ERROR')"></script>
+</body>
+</html>

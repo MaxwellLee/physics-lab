@@ -1,19 +1,23 @@
 {
   "name": "physics-lab",
   "version": "0.1.0",
+  "type": "module",
   "private": true,
   "description": "面向课堂演示的交互式物理实验库",
   "scripts": {
     "preview": "node ./scripts/serve.mjs 8766",
-    "build": "npm run build:eclipse && npm run build:galaxy && npm run build:circuit-bench",
+    "build": "npm run build:eclipse && npm run build:galaxy && npm run build:circuit-bench && npm run build:heat-engine",
     "build:eclipse": "esbuild ./experiments/eclipse/app.js --bundle --format=iife --target=es2020 --minify --outfile=./experiments/eclipse/app.bundle.js",
     "build:galaxy": "esbuild ./experiments/galaxy/app.js --bundle --format=iife --target=es2020 --minify --outfile=./experiments/galaxy/app.bundle.js",
     "build:circuit-bench": "esbuild ./experiments/circuit-bench/app.js --bundle --format=iife --target=es2020 --minify --outfile=./experiments/circuit-bench/app.bundle.js",
+    "build:heat-engine": "esbuild ./experiments/heat-engine/app.js --bundle --format=iife --target=es2020 --minify --outfile=./experiments/heat-engine/app.bundle.js",
     "test:eclipse:browser": "node ./experiments/eclipse/tests/browser.smoke.mjs",
     "test:galaxy:browser": "node ./experiments/galaxy/tests/browser.smoke.mjs",
     "test:circuit-bench": "node ./experiments/circuit-bench/tests/solver.test.mjs",
     "test:circuit-bench:browser": "node ./experiments/circuit-bench/tests/browser.smoke.mjs",
-    "test:circuit-bench:mobile": "node ./experiments/circuit-bench/tests/browser.smoke.mobile.mjs"
+    "test:circuit-bench:mobile": "node ./experiments/circuit-bench/tests/browser.smoke.mobile.mjs",
+    "test:heat-engine": "node ./experiments/heat-engine/tests/physics.test.mjs",
+    "test:heat-engine:browser": "node ./experiments/heat-engine/tests/browser.smoke.mjs"
   },
   "dependencies": {
     "three": "0.180.0"

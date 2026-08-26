@@ -42,6 +42,14 @@ main{position:relative;z-index:1}.hero{min-height:640px;padding:112px clamp(24px
 .cb-dot{position:absolute;left:18%;top:26%;width:7px;height:7px;margin:-3.5px;border-radius:50%;background:#ffd596;box-shadow:0 0 10px #ffd596;z-index:3;animation:cbFlow 6s linear infinite}
 @keyframes cbFlow{0%{left:18%;top:26%}25%{left:82%;top:26%}50%{left:82%;top:74%}75%{left:18%;top:74%}100%{left:18%;top:26%}}
 @media (prefers-reduced-motion:reduce){.cb-dot{animation:none}}
+.engine-visual{background:radial-gradient(circle at 50% 46%,rgba(255,154,73,.16),rgba(42,158,196,.09) 30%,transparent 62%),#050910}
+.engine-cylinder{position:absolute;left:34%;top:17%;width:32%;height:56%;border:1px solid rgba(118,213,238,.45);border-right-color:rgba(118,213,238,.14);border-radius:9px 9px 15px 15px;box-shadow:inset 14px 0 24px rgba(55,173,210,.06)}
+.engine-piston{position:absolute;left:38%;top:34%;width:24%;height:15%;border:1px solid rgba(214,232,236,.68);background:linear-gradient(180deg,rgba(205,224,228,.42),rgba(80,113,124,.18));border-radius:4px;z-index:3;animation:enginePiston 4s ease-in-out infinite}
+.engine-rod{position:absolute;left:49%;top:47%;width:3%;height:28%;background:linear-gradient(#d88b4c,#7d4931);transform-origin:50% 0;transform:rotate(-16deg);z-index:2;animation:engineRod 4s ease-in-out infinite}
+.engine-crank{position:absolute;left:39%;top:67%;width:22%;aspect-ratio:1;border:1px solid rgba(96,221,255,.55);border-radius:50%;box-shadow:0 0 18px rgba(96,221,255,.12)}.engine-crank:after{content:"";position:absolute;left:47%;top:3%;width:7px;height:7px;border-radius:50%;background:#ffd596;box-shadow:0 0 9px #ffd596;animation:engineCrank 4s linear infinite;transform-origin:3px 36px}
+.engine-spark{position:absolute;left:48%;top:20%;width:4%;aspect-ratio:1;border-radius:50%;background:#fff4b5;box-shadow:0 0 8px #fff,0 0 24px #ff9a42;animation:engineSpark 4s steps(1) infinite}
+@keyframes enginePiston{0%,50%,100%{transform:translateY(0)}25%,75%{transform:translateY(55px)}}@keyframes engineRod{0%,50%,100%{transform:rotate(-16deg)}25%{transform:rotate(17deg)}75%{transform:rotate(-17deg)}}@keyframes engineCrank{to{transform:rotate(720deg)}}@keyframes engineSpark{0%,49%,55%,100%{opacity:0}50%,54%{opacity:1}}
+@media (prefers-reduced-motion:reduce){.engine-piston,.engine-rod,.engine-crank:after,.engine-spark{animation:none}}
 .mobile-entry-note{display:none}
 
 /* 手机实验库：入口优先，保留统一的深空视觉语言。 */
