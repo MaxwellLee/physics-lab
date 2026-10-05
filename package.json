@@ -6,7 +6,10 @@
   "description": "面向课堂演示的交互式物理实验库",
   "scripts": {
     "preview": "node ./scripts/serve.mjs 8766",
-    "build": "npm run build:eclipse && npm run build:galaxy && npm run build:circuit-bench && npm run build:heat-engine",
+    "build": "npm run build:eclipse && npm run build:galaxy && npm run build:circuit-bench && npm run build:heat-engine && npm run build:sound-lab",
+    "build:sound-lab": "esbuild ./experiments/sound-lab/app.js --bundle --format=iife --target=es2020 --minify --outfile=./experiments/sound-lab/app.bundle.js",
+    "test:sound-lab": "node ./experiments/sound-lab/tests/model.test.mjs",
+    "test:sound-lab:browser": "node ./experiments/sound-lab/tests/browser.smoke.mjs",
     "build:eclipse": "esbuild ./experiments/eclipse/app.js --bundle --format=iife --target=es2020 --minify --outfile=./experiments/eclipse/app.bundle.js",
     "build:galaxy": "esbuild ./experiments/galaxy/app.js --bundle --format=iife --target=es2020 --minify --outfile=./experiments/galaxy/app.bundle.js",
     "build:circuit-bench": "esbuild ./experiments/circuit-bench/app.js --bundle --format=iife --target=es2020 --minify --outfile=./experiments/circuit-bench/app.bundle.js",
